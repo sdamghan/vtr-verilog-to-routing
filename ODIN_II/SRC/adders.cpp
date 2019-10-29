@@ -927,13 +927,54 @@ void split_adder(nnode_t *nodeo, int a, int b, int sizea, int sizeb, int cin, in
 /*-------------------------------------------------------------------------
  * (function: mutation)
  *
- * T
- *	t 
- *	m
+ * This function will travese all add list and create a array of their types
+ *	as a chromosome. After that, use specified methods like cross over and 
+ *	gene changing to mutate the chromosome. Here is the important place to 
+ *  consider the rate of mutation and handle stucking the local optimum.
  *-----------------------------------------------------------------------*/
 vtr::t_linked_vptr * mutation (vtr::t_linked_vptr * parent)
 {
-	return parent;
+	// create a new array as a chromosome
+	vtr::t_linked_vptr *new_chromosome = (vtr::t_linked_vptr *) vtr::malloc(sizeof(vtr::t_linked_vptr *));
+	new_chromosome = parent;
+	
+	// create a new int array to keep the adder types. This is because we can toggle genes values which are adder types
+	int *adder_types;
+	int num_of_adders = 0;
+	
+	// generating the array of gene types
+	while (new_chromosome != NULL)
+	{
+		adder_types = (int*)vtr::realloc(adder_types, sizeof(int)*(num_of_adders+1));
+		adder_types[num_of_adders] = ((nnode_t *)new_chromosome)->type;
+
+		new_chromosome = new_chromosome->next;
+		num_of_adders++;
+	}
+
+	// do crossover based on our desire algorithm
+	int crossover_point = rand()%sizeof(adder_types);
+
+
+
+
+	// mutation
+	int gene_pointer;
+	float mutation_rate = 0.05;
+
+	int num_of_genes_should_be_mutated = mutation_rate*sizeof(adder_types);
+
+	while ( num_of_genes_should_be_mutated != 0)
+	{
+		// find random adder for mutation
+		gene_pointer = rand()%sizeof(adder_types);
+		// do mutation for the specified adder
+		adder_types[gene_pointer] = rand()/* %NUM_OF_ADDER_TYPES */;
+		
+		num_of_genes_should_be_mutated--;
+	}
+
+	return new_chromosome;
 }
 
 /*-------------------------------------------------------------------------
