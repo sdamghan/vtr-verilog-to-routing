@@ -57,9 +57,11 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 /* unique numbers to mark the nodes as we DFS traverse the netlist */
 #define PARTIAL_MAP_TRAVERSE_VALUE 10
-// MEHRSHAD //
+
 #define PARTIAL_MAP_TRAVERSE_VALUE_GA_ADDERS 11
-// MEHRSHAD //
+#define TRAVERSE_VALUE_CP_S2E 12
+#define TRAVERSE_VALUE_CP_E2S 13
+
 #define OUTPUT_TRAVERSE_VALUE 12
 #define COUNT_NODES 14 /* NOTE that you can't call countnodes one after the other or the mark will be incorrect */
 #define COMBO_LOOP 15
@@ -106,6 +108,8 @@ struct global_args_t
 
 	argparse::ArgValue<bool> adder_def; // DEPRECATED
 	argparse::ArgValue<bool> ga_adder; // enable ga_adder
+	argparse::ArgValue<bool> cp_analyser; // enable cp_analyser
+
 	
     // defines if the first cin of an adder/subtractor is connected to a global gnd/vdd
     // or generated using a dummy adder with both inputs set to gnd/vdd
@@ -487,6 +491,10 @@ struct nnode_t
 	
 	//Generic gate output
 	unsigned char generic_output; //describes the output (1 or 0) of generic blocks
+
+	// Critical path from starting and ending point
+	int cp_from_start;
+	int cp_from_end;
 };
 
 
@@ -533,9 +541,9 @@ struct nnet_t
 	short unique_net_data_id;
 	void *net_data;
 
-	// MEHRSHAD //
 	short traverse_visited; // a way to mark if we've visited yet
-	// MEHRSHAD //
+	int cp_up;
+	int cp_down;
 
 	/////////////////////
 	// For simulation
