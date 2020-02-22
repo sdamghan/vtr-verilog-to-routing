@@ -37,8 +37,8 @@ ga_type_e* new_mutation(ga_type_e* src, int population_size, int type_length);
 
 void free_ga_items_in_list(ga_t* list);
 
-double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number, metric_t* golden_values);
-void get_golden_standard(ga_t* list, netlist_t* netlist, short traverse_number, metric_t* golden_values);
+double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number/*, metric_t* golden_values */);
+// void set_golden_standard(ga_t* list, netlist_t* netlist, short traverse_number, metric_t* golden_values);
 
 /*----------------------------------------------------------------------new_generation
  * (function: partial_map_ga_item_top) 
@@ -47,10 +47,10 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
     // if we have items in the list we apply GA mapping
     ga_type_e* best_generation = NULL;
     if (list->size) {
-        metric_t golden_values;
-        get_golden_standard(list, netlist, traverse_number, &golden_values);
+        // metric_t golden_values;
+        // set_golden_standard(list, netlist, traverse_number, &golden_values);
         best_generation = new_generation(list->size, list->initial_type);
-        double best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number, &golden_values);
+        double best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number/*, &golden_values */);
         ga_type_e* best_mutation = best_generation;
 
         printf("**** Initial chromosome fitness: %f\n", best_fit);
@@ -66,7 +66,7 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
 
                 for (int j = 1; j < configuration.generation_size; j += 1) {
                     ga_type_e* mutation = new_mutation(best_generation, list->size, list->type_length);
-                    double current_fit = partial_map_ga_item(list, mutation, netlist, traverse_number, &golden_values);
+                    double current_fit = partial_map_ga_item(list, mutation, netlist, traverse_number/*, &golden_values */);
 
                     printf("current fitness: %lf\n", current_fit);
 
@@ -85,7 +85,8 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
                 if (best_generation != best_mutation) {
                     vtr::free(best_generation);
                     best_generation = best_mutation;
-                    best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number, &golden_values);
+                    best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number/*, &golden_values */);
+                    // set_golden_standard(list, best_generation, netlist, traverse_number, &golden_values);
                     // force to recompute the whole tree
                     traverse_number += 1;
                     compute_statistics(netlist, traverse_number);
@@ -101,7 +102,7 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
  * adders into the adder list and after that, it instantiates adders and 
  * shrinks them into logics
  *--------------------------------------------------------------------*/
-double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number, metric_t* golden_values) {
+double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number/*, &golden_values */) {
     metric_t current_values;
     init(&current_values);
 
@@ -111,9 +112,7 @@ double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist,
         if (conn != NULL) {
             // we have the connections, we can simply remap the I/O
             reattach_connection(conn);
-            //printf("------>1------>connection exists\n");
         } else {
-            // printf("------>2------>connection not exists<<%d>>\n", type_list[i]);
             conn = instantiate_subgraph(list->node[i],
                                         type_list[i],
                                         list->instantiate_soft_logic,
@@ -127,27 +126,47 @@ double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist,
         add_into(&current_values, &node_stat->upward);
         add_into(&current_values, &node_stat->downward);
 
-        delete_stat(node_stat);
-    }
-    return distance_to_goal(golden_values, &current_values);
-}
-
-/*----------------------------------------------------------------------
- * (function: partial_map_adders) This function employ the new type of 
- * adders into the adder list and after that, it instantiates adders and 
- * shrinks them into logics
- *--------------------------------------------------------------------*/
-void get_golden_standard(ga_t* list, netlist_t* netlist, short traverse_number, metric_t* golden_values) {
-    init(golden_values);
-    for (int i = 0; i < list->size; i += 1) {
-        net_stat_t* node_stat = get_stats(list->node[i], netlist, traverse_number);
-
-        add_into(golden_values, &node_stat->downward);
-        add_into(golden_values, &node_stat->upward);
+        // print_stats(&current_values);
 
         delete_stat(node_stat);
     }
+    // return distance_to_goal(golden_values, &current_values);
+    return fitness_calc(netlist, &current_values);
 }
+
+// /*----------------------------------------------------------------------
+//  * (function: partial_map_adders) This function employ the new type of 
+//  * adders into the adder list and after that, it instantiates adders and 
+//  * shrinks them into logics
+//  *--------------------------------------------------------------------*/
+// void set_golden_standard(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number, metric_t* golden_values) {
+//     init(golden_values);
+
+//     for (int i = 0; i < list->size; i += 1) {
+//         connection_t* conn = list->connectivity[type_list[i]][i];
+
+//         if (conn != NULL) {
+//             // we have the connections, we can simply remap the I/O
+//             reattach_connection(conn);
+//         } else {
+//             conn = instantiate_subgraph(list->node[i],
+//                                         type_list[i],
+//                                         list->instantiate_soft_logic,
+//                                         -1, // force a later recomputation
+//                                         netlist);
+//         }
+//         list->connectivity[type_list[i]][i] = conn;
+
+//         net_stat_t* node_stat = get_stats(conn, netlist, traverse_number);
+
+//         add_into(golden_values, &node_stat->upward);
+//         add_into(golden_values, &node_stat->downward);
+
+//         // print_stats(&golden_values);
+
+//         delete_stat(node_stat);
+//     }
+// }
 
 connection_t* new_connection(nnode_t* parent) {
     connection_t* connection = NULL;
@@ -312,7 +331,7 @@ ga_type_e* new_mutation(ga_type_e* src, int population_size, int type_length) {
     // Find points based on the mutation rate and change their values randomly
 
     int mutation_count = configuration.mutation_rate * population_size;
-    mutation_count = std::max(population_size, mutation_count);
+    mutation_count = std::min(population_size, mutation_count);
 
     for (int count = 0; count < mutation_count; count += 1) {
         int i = rand() % population_size;

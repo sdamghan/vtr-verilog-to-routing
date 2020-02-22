@@ -110,8 +110,10 @@ void traverse_forward(nnode_t* node, int toplevel, int remove_me) {
                 ADDER_START_NODE = VCC_NODE;
         }
         /* Check if we've found the head of an adder or subtractor chain */
-        if (node->input_pins[node->num_input_pins - 1]->net->driver_pin->node->type == ADDER_START_NODE) {
-            addsub_list_next = insert_node_list(addsub_list_next, node);
+        if (node->input_pins[node->num_input_pins - 1] != NULL){
+            if (node->input_pins[node->num_input_pins - 1]->net->driver_pin->node->type == ADDER_START_NODE) {
+                addsub_list_next = insert_node_list(addsub_list_next, node);
+            }
         }
     }
 
@@ -168,7 +170,8 @@ void remove_unused_nodes(node_list_t* remove) {
         int i;
         for (i = 0; i < remove->node->num_input_pins; i++) {
             npin_t* input_pin = remove->node->input_pins[i];
-            input_pin->net->fanout_pins[input_pin->pin_net_idx] = NULL; // Remove the fanout pin from the net
+            if(input_pin != NULL)
+                input_pin->net->fanout_pins[input_pin->pin_net_idx] = NULL; // Remove the fanout pin from the net
         }
         remove->node->node_data = VISITED_REMOVAL;
         remove = remove->next;

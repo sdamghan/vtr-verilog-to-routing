@@ -106,6 +106,9 @@ struct global_args_t {
 
     argparse::ArgValue<std::string> adder_def; // DEPRECATED
     argparse::ArgValue<double> ga_partial_map;   // enable ga_partial_map
+        argparse::ArgValue<double> ga_partial_map_mr;
+        argparse::ArgValue<double> ga_partial_map_gs;
+        argparse::ArgValue<double> ga_partial_map_gc;
 
 
     // defines if the first cin of an adder/subtractor is connected to a global gnd/vdd
@@ -350,6 +353,12 @@ enum direction_e {
     DOWNWARD,
 };
 
+enum branching_type_e {
+    FANIN,
+    FANOUT,
+    branching_type_END
+};
+
 struct typ {
     char* identifier;
     VNumber* vnumber = nullptr;
@@ -435,6 +444,10 @@ struct metric_t {
     double max_depth;
     double avg_depth;
     double avg_width;
+    int min_fanin;
+    int max_fanin;
+    int min_fanout;
+    int max_fanout;
 };
 
 struct net_stat_t {

@@ -428,6 +428,21 @@ void get_options(int argc, char** argv) {
         .default_value("2.0")
         .metavar("FOOTPRINT_RATIO");
 
+        other_grp.add_argument(global_args.ga_partial_map_mr, "--GA-MR")
+        .help("SET MUTATION RATE")
+        .default_value("0.5")
+        .metavar("MUTATION_RATE");
+
+        other_grp.add_argument(global_args.ga_partial_map_gs, "--GA-GS")
+        .help("SET GENERATION SIZE")
+        .default_value("6")
+        .metavar("GENERATION_SIZE");
+
+        other_grp.add_argument(global_args.ga_partial_map_gc, "--GA-GC")
+        .help("SET GENERATION COUNT")
+        .default_value("32")
+        .metavar("GENERATION_COUNT");
+
     other_grp.add_argument(global_args.random_seed, "-r")
         .help("Random seed")
         .default_value("0")
@@ -573,6 +588,15 @@ void get_options(int argc, char** argv) {
     } else {
         global_args.ga_partial_map.set(configuration.ga_partial_map, argparse::Provenance::SPECIFIED);
     }
+        if (global_args.ga_partial_map_mr.provenance() == argparse::Provenance::SPECIFIED) {
+        configuration.mutation_rate = global_args.ga_partial_map_mr;
+        } 
+        if (global_args.ga_partial_map_gs.provenance() == argparse::Provenance::SPECIFIED) {
+        configuration.generation_size = global_args.ga_partial_map_gs;
+        }    
+        if (global_args.ga_partial_map_gc.provenance() == argparse::Provenance::SPECIFIED) {
+        configuration.generation_count = global_args.ga_partial_map_gc;
+        }        
 
     if (global_args.adder_cin_global.provenance() == argparse::Provenance::SPECIFIED) {
         configuration.adder_cin_global = global_args.adder_cin_global;
@@ -600,7 +624,7 @@ void set_default_config() {
     configuration.output_type = std::string("blif");
     configuration.output_ast_graphs = 0;
     configuration.output_netlist_graphs = 0;
-    configuration.mutation_rate = 1;
+    configuration.mutation_rate = 0.5;
     configuration.generation_size = 6;
     configuration.generation_count = 32;
     // by default we target twice as wide then deep

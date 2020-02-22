@@ -27,14 +27,22 @@ void init(metric_t* m) {
     m->max_depth = 0;
     m->avg_depth = 0;
     m->avg_width = 0;
+    m->min_fanin = 0;
+    m->max_fanin = 0;
+    m->min_fanout = 0;
+    m->max_fanout = -12;
 }
 
-static void print_stats(metric_t* m) {
-    printf("\n\t%s:%0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n",
+void print_stats(metric_t* m) {
+    printf("\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %d\n\t%s: %d\n\t%s: %d\n\t%s: %d\n",
            "minimal depth", m->min_depth,
            "maximum depth", m->max_depth,
            "average depth", m->avg_depth,
-           "average fan-in", m->avg_width);
+           "average fan-in", m->avg_width,
+           "minimal fan-in", m->min_fanin,
+           "maximum fan-in", m->max_fanin,
+           "minimal fan-out", m->min_fanout,
+           "maximum fan-out", m->max_fanout);
 }
 
 void copy(metric_t* dest, metric_t* src) {
@@ -45,6 +53,10 @@ void copy(metric_t* dest, metric_t* src) {
             dest->max_depth = src->max_depth;
             dest->avg_depth = src->avg_depth;
             dest->avg_width = src->avg_width;
+            dest->min_fanin = src->min_fanin;
+            dest->max_fanin = src->max_fanin;
+            dest->min_fanout = src->min_fanout;
+            dest->max_fanout = src->max_fanout;
         }
     }
 }
@@ -54,6 +66,20 @@ void add_into(metric_t* dest, metric_t* src) {
     dest->max_depth += src->max_depth;
     dest->avg_depth += src->avg_depth;
     dest->avg_width += src->avg_width;
+
+    if (dest->min_fanin == 0) {
+        dest->min_fanin = src->min_fanin;
+    } else {
+        dest->min_fanin = std::min(src->min_fanin, dest->min_fanin);
+    }
+    dest->max_fanin = std::max(src->max_fanin, dest->max_fanin);
+
+    if (dest->min_fanout == 0) {
+        dest->min_fanout = src->min_fanout;
+    } else {
+        dest->min_fanout = std::min(src->min_fanout, dest->min_fanout);
+    }
+    dest->max_fanout = std::max(src->max_fanout, dest->max_fanout);
 }
 
 inline double circuit_ratio(metric_t* v) {
@@ -80,7 +106,20 @@ double distance_to_goal(metric_t* golden_values, metric_t* calculated_values) {
     return abs(circuit_effective_ratio(calculated_values) * circuit_effective_area(golden_values, calculated_values));
 }
 
-static void aggregate(metric_t* dest, metric_t** sources, int source_count) {
+double fitness_calc (netlist_t* netlist, metric_t* m) {
+    long long node_count = netlist->total_net_count;
+    double area = circuit_area(m);
+
+    double area_efectness = (m->max_depth) / (area*node_count);
+    double fan_effectness = m->max_fanin/m->max_fanout;
+    printf("\n\n \t++node_count: %lld\n\t++area: %f\n\t++max_depth: %f\n\t++max_fan-in: %d\n\t++max_fan-out: %d\n\n", 
+            node_count, area, m->max_depth, m->max_fanin, m->max_fanout);
+
+    return 100000 * (area_efectness) * (fan_effectness);
+}
+
+
+static void aggregate(metric_t* dest, metric_t** sources, int source_count, branching_type_e btype) {
     int actual_count = 0;
     init(dest);
 
@@ -104,17 +143,61 @@ static void aggregate(metric_t* dest, metric_t** sources, int source_count) {
         dest->avg_depth /= actual_count;
         dest->avg_width /= actual_count;
     }
+
+    if (btype == FANIN) {
+        for (int i = 0; sources && i < source_count; i += 1) {
+        metric_t* src = sources[i];
+        if (src) {
+            if (dest->min_fanin == 0) {
+                dest->min_fanin = src->min_fanin;
+            } else {
+                dest->min_fanin = std::min(src->min_fanin, dest->min_fanin);
+            }
+            dest->max_fanin = std::max(src->max_fanin, dest->max_fanin);
+        }
+    }
+    }
+    else if (btype == FANOUT) {
+        for (int i = 0; sources && i < source_count; i += 1) {
+            metric_t* src = sources[i];
+            if (src) {
+                if (dest->min_fanout == 0) {
+                    dest->min_fanout = src->min_fanout;
+                } else {
+                    dest->min_fanout = std::min(src->min_fanout, dest->min_fanout);
+                }
+                dest->max_fanout = std::max(src->max_fanout, dest->max_fanout);
+            }
+        }
+    }
 }
 
-static void add_net_to_stat(metric_t* dest, int branching_factor) {
+static void add_net_to_stat(metric_t* dest, int branching_factor, branching_type_e btype) {
     dest->min_depth += 1;
     dest->max_depth += 1;
     dest->avg_depth += 1;
     dest->avg_width += branching_factor;
+    if (btype == FANIN) {
+        dest->min_fanin  = std::min(dest->min_fanin, branching_factor);
+        dest->max_fanin  = std::max(dest->max_fanin, branching_factor);
+
+    } else if (btype == FANOUT) {
+        dest->min_fanout = std::min(dest->min_fanout, branching_factor);
+        dest->max_fanout  = std::max(dest->max_fanout, branching_factor);
+    }
 }
 
-static void add_node_to_stat(metric_t* /* dest */, int /* branching_factor */) {
-    // nothing to do yet
+static void add_node_to_stat(metric_t* dest, int branching_factor, branching_type_e btype) {
+    
+    if (btype == FANIN) {
+        dest->min_fanin  = std::min(dest->min_fanin, branching_factor);
+        dest->max_fanin  = std::max(dest->max_fanin, branching_factor);
+        
+    } else if (btype == FANOUT) {
+        dest->min_fanout = std::min(dest->min_fanout, branching_factor);
+        dest->max_fanout  = std::max(dest->max_fanout, branching_factor);
+
+    }
 }
 
 static void mark_traversed(nnet_t* net, netlist_t* netlist, int traverse_mark_number) {
@@ -138,11 +221,11 @@ static metric_t* get_upward_stat(nnet_t* net, netlist_t* netlist, int traverse_m
             if (net->driver_pin) {
                 metric_t** parent_stat = (metric_t**)vtr::calloc(1, sizeof(metric_t*));
                 parent_stat[0] = get_upward_stat(net->driver_pin->node, netlist, traverse_mark_number);
-                aggregate(destination, parent_stat, 1);
+                aggregate(destination, parent_stat, 1, FANIN);
                 vtr::free(parent_stat);
             }
 
-            add_net_to_stat(destination, 1);
+            add_net_to_stat(destination, 1, FANIN);
         }
     }
     return destination;
@@ -164,10 +247,10 @@ static metric_t* get_downward_stat(nnet_t* net, netlist_t* netlist, int traverse
                         child_stat[i] = get_downward_stat(net->fanout_pins[i]->node, netlist, traverse_mark_number);
                     }
                 }
-                aggregate(destination, child_stat, net->num_fanout_pins);
+                aggregate(destination, child_stat, net->num_fanout_pins, FANOUT);
                 vtr::free(child_stat);
             }
-            add_net_to_stat(destination, net->num_fanout_pins);
+            add_net_to_stat(destination, net->num_fanout_pins, FANOUT);
         }
     }
     return destination;
@@ -189,10 +272,10 @@ static metric_t* get_upward_stat(nnode_t* node, netlist_t* netlist, int traverse
                         parent_stat[i] = get_upward_stat(node->input_pins[i]->net, netlist, traverse_mark_number);
                     }
                 }
-                aggregate(destination, parent_stat, node->num_input_pins);
+                aggregate(destination, parent_stat, node->num_input_pins, FANIN);
                 vtr::free(parent_stat);
             }
-            add_node_to_stat(destination, node->num_input_pins);
+            add_node_to_stat(destination, node->num_input_pins, FANIN);
         }
     }
     return destination;
@@ -214,10 +297,10 @@ static metric_t* get_downward_stat(nnode_t* node, netlist_t* netlist, int traver
                         child_stat[i] = get_downward_stat(node->output_pins[i]->net, netlist, traverse_mark_number);
                     }
                 }
-                aggregate(destination, child_stat, node->num_output_pins);
+                aggregate(destination, child_stat, node->num_output_pins, FANOUT);
                 vtr::free(child_stat);
             }
-            add_node_to_stat(destination, node->num_output_pins);
+            add_node_to_stat(destination, node->num_output_pins, FANOUT);
         }
     }
     return destination;
@@ -239,7 +322,7 @@ static metric_t* get_downward_signal_stat(metric_t* destination, signal_list_t* 
                     }
                 }
             }
-            aggregate(destination, child_stat, signals->count);
+            aggregate(destination, child_stat, signals->count, FANOUT);
             vtr::free(child_stat);
         }
     }
@@ -262,7 +345,7 @@ static metric_t* get_upward_signal_stat(metric_t* destination, signal_list_t* si
                     }
                 }
             }
-            aggregate(destination, child_stat, signals->count);
+            aggregate(destination, child_stat, signals->count, FANIN);
 
             vtr::free(child_stat);
         }
@@ -327,8 +410,8 @@ void compute_statistics(netlist_t* netlist, int traverse_mark_number) {
             if (netlist->top_output_nodes[i] != NULL) {
                 metric_t* current = get_upward_stat(netlist->top_output_nodes[i], netlist, traverse_mark_number);
                 if (current != NULL) {
-                    printf("Stats for Primary Fanout: %s", netlist->top_output_nodes[i]->name);
-                    print_stats(current);
+                    // printf("Stats for Primary Fanout: %s", netlist->top_output_nodes[i]->name);
+                    // print_stats(current);
                 }
             }
         }
