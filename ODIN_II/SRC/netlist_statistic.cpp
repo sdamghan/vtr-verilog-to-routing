@@ -111,11 +111,11 @@ double fitness_calc (netlist_t* netlist, metric_t* m) {
     double area = circuit_area(m);
 
     double area_efectness = (m->max_depth) / (area*node_count);
-    double fan_effectness = m->max_fanin/m->max_fanout;
-    printf("\n\n \t++node_count: %lld\n\t++area: %f\n\t++max_depth: %f\n\t++max_fan-in: %d\n\t++max_fan-out: %d\n\n", 
-            node_count, area, m->max_depth, m->max_fanin, m->max_fanout);
+    double fan_effectness = (m->max_fanin)+(m->max_fanout);
+    // printf("\n\n \t++node_count: %lld\n\t++area: %f\n\t++max_depth: %f\n\t++max_fan-in: %d\n\t++max_fan-out: %d\n\t++area_effectness: %f\n\t++fan_effectness: %f\n\n", 
+    //       node_count, area, m->max_depth, m->max_fanin, m->max_fanout, area_efectness, fan_effectness);
 
-    return 100000 * (area_efectness) * (fan_effectness);
+    return 1000000 * (area_efectness) / (fan_effectness);
 }
 
 

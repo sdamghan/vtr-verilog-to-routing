@@ -429,8 +429,8 @@ void get_options(int argc, char** argv) {
         .metavar("FOOTPRINT_RATIO");
 
         other_grp.add_argument(global_args.ga_partial_map_mr, "--GA-MR")
-        .help("SET MUTATION RATE")
-        .default_value("0.5")
+        .help("SET MUTATION RATE PERCENTAGE")
+        .default_value("50")
         .metavar("MUTATION_RATE");
 
         other_grp.add_argument(global_args.ga_partial_map_gs, "--GA-GS")
@@ -589,14 +589,14 @@ void get_options(int argc, char** argv) {
         global_args.ga_partial_map.set(configuration.ga_partial_map, argparse::Provenance::SPECIFIED);
     }
         if (global_args.ga_partial_map_mr.provenance() == argparse::Provenance::SPECIFIED) {
-        configuration.mutation_rate = global_args.ga_partial_map_mr;
+        configuration.mutation_rate = global_args.ga_partial_map_mr/100;
         } 
         if (global_args.ga_partial_map_gs.provenance() == argparse::Provenance::SPECIFIED) {
         configuration.generation_size = global_args.ga_partial_map_gs;
         }    
         if (global_args.ga_partial_map_gc.provenance() == argparse::Provenance::SPECIFIED) {
         configuration.generation_count = global_args.ga_partial_map_gc;
-        }        
+        } 
 
     if (global_args.adder_cin_global.provenance() == argparse::Provenance::SPECIFIED) {
         configuration.adder_cin_global = global_args.adder_cin_global;
