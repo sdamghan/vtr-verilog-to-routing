@@ -42,6 +42,7 @@ function check_dir () {
 ##################--MAIN--######################
 ################################################
 #make debug
+gcc ./tocsv.c -o tocsv -std=c99
 
 check_dir
 mkdir -p ${NEW_DIR}
@@ -54,12 +55,14 @@ do
         RUN_PATH=${NEW_DIR}/$filename
 
         mkdir ${RUN_PATH}/mutation_rate_changing
+        mkdir ${RUN_PATH}/mutation_rate_changing/csv
         generation_size=$DEFAULT_GS
         generation_count=$DEFAULT_GC
         start=$(date +%s%N)/1000000
         for ((mr=5; mr<=100; mr=mr+5))
         do
-                ./odin_II -V $file --GA $footprint --GA-MR $mr --GA-GS $generation_size --GA-GC $generation_count > ${RUN_PATH}/mutation_rate_changing/$filename-MR_$mr%-GS_$generation_size-GC_$generation_count.out
+                ./odin_II -V $file --GA $footprint --GA-MR $mr --GA-GS $generation_size --GA-GC $generation_count > ${RUN_PATH}/mutation_rate_changing/$filename-MR_$mr%-GS_$generation_size-GC_$generation_count.out | parallel -j 2
+                ./tocsv ${RUN_PATH}/mutation_rate_changing/$filename-MR_$mr%-GS_$generation_size-GC_$generation_count.out > ${RUN_PATH}/mutation_rate_changing/csv/$filename-MR_$mr%-GS_$generation_size-GC_$generation_count.csv
         done
         end=$(date +%s%N)/1000000
 
@@ -72,12 +75,14 @@ do
         ##########################################################
         # fix mutation rate and generation count! increase the generation size by 1 till 20
         mkdir ${RUN_PATH}/generation_size_changing
+         mkdir ${RUN_PATH}/generation_size_changing/csv
         mutation_rate=$DEFAULT_MR
         generation_count=$DEFAULT_GC
         start=$(date +%s%N)/1000000
         for ((gs=1; gs<=20; gs++))
         do
-                ./odin_II -V $file --GA $footprint --GA-MR $mutation_rate --GA-GS $gs --GA-GC $generation_count > ${RUN_PATH}/generation_size_changing/$filename-MR_$mutation_rate%-GS_$gs-GC_$generation_count.out
+                ./odin_II -V $file --GA $footprint --GA-MR $mutation_rate --GA-GS $gs --GA-GC $generation_count > ${RUN_PATH}/generation_size_changing/$filename-MR_$mutation_rate%-GS_$gs-GC_$generation_count.out } | parallel -j 2
+                ./tocsv ${RUN_PATH}/generation_size_changing/$filename-MR_$mutation_rate%-GS_$gs-GC_$generation_count.out > ${RUN_PATH}/generation_size_changing/csv/$filename-MR_$mutation_rate%-GS_$gs-GC_$generation_count.csv
         done
         end=$(date +%s%N)/1000000
 
@@ -90,12 +95,14 @@ do
         ##########################################################
         # fix mutation rate and generation size! increase the generation count by 1000 till 100K
         mkdir ${RUN_PATH}/generation_count_changing
+        mkdir ${RUN_PATH}/generation_count_changing/csv
         mutation_rate=$DEFAULT_MR
         generation_size=$DEFAULT_GS
         start=$(date +%s%N)/1000000
         for ((gc=10; gc<=100; gc=gc+10))
         do
-                ./odin_II -V $file --GA $footprint --GA-MR $mutation_rate --GA-GS $generation_size --GA-GC $gc > ${RUN_PATH}/generation_count_changing/$filename-MR_$mutation_rate%-GS_$generation_size-GC_$gc.out
+                ./odin_II -V $file --GA $footprint --GA-MR $mutation_rate --GA-GS $generation_size --GA-GC $gc > ${RUN_PATH}/generation_count_changing/$filename-MR_$mutation_rate%-GS_$generation_size-GC_$gc.out | parallel -j 2
+                ./tocsv ${RUN_PATH}/generation_count_changing/$filename-MR_$mutation_rate%-GS_$generation_size-GC_$gc.out > ${RUN_PATH}/generation_count_changing/csv/$filename-MR_$mutation_rate%-GS_$generation_size-GC_$gc.csv
         done
         end=$(date +%s%N)/1000000
 

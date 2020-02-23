@@ -37,6 +37,6 @@ void free_connection(connection_t* to_delete);
 
 void print_header();
 
-void print_type_stat(ga_t* list, ga_type_e* mapping, netlist_t* netlist);
+void print_type_stat(metric_t *current_values, ga_t* list, ga_type_e* mapping, netlist_t* netlist);
 
 #endif //GA_PARTIAL_MAP_H

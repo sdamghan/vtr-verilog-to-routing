@@ -37,7 +37,7 @@ ga_type_e* new_mutation(ga_type_e* src, int population_size, int type_length);
 
 void free_ga_items_in_list(ga_t* list);
 
-double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number/*, metric_t* golden_values */);
+double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number, metric_t* current_values);
 // void set_golden_standard(ga_t* list, netlist_t* netlist, short traverse_number, metric_t* golden_values);
 
 /*----------------------------------------------------------------------new_generation
@@ -47,30 +47,28 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
     // if we have items in the list we apply GA mapping
     ga_type_e* best_generation = NULL;
     if (list->size) {
-        // metric_t golden_values;
+        metric_t current_values;
         // set_golden_standard(list, netlist, traverse_number, &golden_values);
-        best_generation = new_generation(list->size, list->initial_type);
-        double best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number/*, &golden_values */);
-        ga_type_e* best_mutation = best_generation;
-
-        printf("**** Initial chromosome fitness: %f\n", best_fit);
-
         print_header();
+        best_generation = new_generation(list->size, list->initial_type);
+        double best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number, &current_values );
+        ga_type_e* best_mutation = best_generation;
 
         if (global_args.ga_partial_map.provenance() == argparse::Provenance::SPECIFIED) {
             for (int i = 0; i < configuration.generation_count; i += 1) {
                 best_mutation = best_generation;
 
-                printf(">>>>>>>>>>>>>>>>>>>>>>>> Generation number: %d\n", i);
-                printf("\tparent fitness: %f\n", best_fit);
+                printf(">Generation_number %d\n", i);
+                printf("parent_fitness %f\n", best_fit);
+                print_type_stat(&current_values, list, best_mutation, netlist);
 
                 for (int j = 1; j < configuration.generation_size; j += 1) {
                     ga_type_e* mutation = new_mutation(best_generation, list->size, list->type_length);
-                    double current_fit = partial_map_ga_item(list, mutation, netlist, traverse_number/*, &golden_values */);
+                    double current_fit = partial_map_ga_item(list, mutation, netlist, traverse_number, &current_values );
 
-                    printf("current fitness: %lf\n", current_fit);
+                    printf("current_fitness %lf\n", current_fit);
 
-                    print_type_stat(list, mutation, netlist);
+                    print_type_stat(&current_values, list, mutation, netlist);
 
                     if (current_fit < best_fit) {
                         if (best_mutation != best_generation) {
@@ -85,7 +83,7 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
                 if (best_generation != best_mutation) {
                     vtr::free(best_generation);
                     best_generation = best_mutation;
-                    best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number/*, &golden_values */);
+                    best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number, &current_values );
                     // set_golden_standard(list, best_generation, netlist, traverse_number, &golden_values);
                     // force to recompute the whole tree
                     traverse_number += 1;
@@ -102,9 +100,8 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
  * adders into the adder list and after that, it instantiates adders and 
  * shrinks them into logics
  *--------------------------------------------------------------------*/
-double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number/*, &golden_values */) {
-    metric_t current_values;
-    init(&current_values);
+double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number, metric_t *current_values ) {
+    init(current_values);
 
     for (int i = 0; i < list->size; i += 1) {
         connection_t* conn = list->connectivity[type_list[i]][i];
@@ -123,15 +120,15 @@ double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist,
 
         net_stat_t* node_stat = get_stats(conn, netlist, traverse_number);
 
-        add_into(&current_values, &node_stat->upward);
-        add_into(&current_values, &node_stat->downward);
+        add_into(current_values, &node_stat->upward);
+        add_into(current_values, &node_stat->downward);
 
         // print_stats(&current_values);
 
         delete_stat(node_stat);
     }
     // return distance_to_goal(golden_values, &current_values);
-    return fitness_calc(netlist, &current_values);
+    return fitness_calc(netlist, current_values);
 }
 
 // /*----------------------------------------------------------------------
@@ -353,7 +350,7 @@ void print_header() {
            fmt_len, "Nets");
 }
 
-void print_type_stat(ga_t* list, ga_type_e* mapping, netlist_t* netlist) {
+void print_type_stat(metric_t *current_values, ga_t* list, ga_type_e* mapping, netlist_t* netlist) {
     long long* type_count = (long long*)vtr::calloc(list->type_length, sizeof(long long));
     const char* op_name
         = name_based_on_op(list->op);
@@ -364,6 +361,9 @@ void print_type_stat(ga_t* list, ga_type_e* mapping, netlist_t* netlist) {
     }
 
     long long net_count_after = netlist->total_net_count;
+
+    printf("max_depth: %d\nmax_fan-in: %d\nmax_fan-out: %d\n", 
+              (int)current_values->max_depth, current_values->max_fanin, current_values->max_fanout);
 
     printf("%-*s %-*lld %-*lld\n",
            fmt_len, op_name,

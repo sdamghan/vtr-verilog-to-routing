@@ -162,7 +162,7 @@ static ODIN_ERROR_CODE synthesize_verilog() {
     /* point where we convert netlist to FPGA or other hardware target compatible format */
     printf("Performing Partial Map to target device");
     if (global_args.ga_partial_map.provenance() == argparse::Provenance::SPECIFIED) {
-        printf(" using Genetic Algorithm\n\titteration: %d\n\tgeneration size: %d\n\tmutation rate:%0.2lf\n",
+        printf(" using Genetic Algorithm\n\titteration: %d\n\tgeneration size: %d\n\tmutation rate: %0.2lf\n",
                configuration.generation_count,
                configuration.generation_size,
                configuration.mutation_rate);

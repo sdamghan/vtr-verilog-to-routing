@@ -1,0 +1,5 @@
+mutation_rate,generation_size,generation_count
+0.350,2,1
+generation_number, fitness,critical_path,max_fanin,max_fanout,op_type,op_num,node_count,RCA,CSLA,BE_CSLA
+0,0.002711,1159,1968,983,ADD,30,10489,30,0,0
+0,0.002479,1173,1968,983,ADD,30,10774,23,7,0

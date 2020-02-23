@@ -115,6 +115,7 @@ double fitness_calc (netlist_t* netlist, metric_t* m) {
     // printf("\n\n \t++node_count: %lld\n\t++area: %f\n\t++max_depth: %f\n\t++max_fan-in: %d\n\t++max_fan-out: %d\n\t++area_effectness: %f\n\t++fan_effectness: %f\n\n", 
     //       node_count, area, m->max_depth, m->max_fanin, m->max_fanout, area_efectness, fan_effectness);
 
+
     return 1000000 * (area_efectness) / (fan_effectness);
 }
 
