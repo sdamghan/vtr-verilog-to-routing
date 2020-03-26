@@ -59,7 +59,7 @@ int main (int argc, char* argv[]) {
     fscanf(fp1, "%s %s %f\n", name, name, &mutation_rate);
     
     
-    printf("mutation_rate,generation_size,generation_count\n");
+    //printf("mutation_rate,generation_size,generation_count\n");
     printf("%.3f,%d,%d\n", mutation_rate, generation_size, generation_count);
 
     // printf("generation_count: -%d-\n", generation_count);
@@ -68,7 +68,7 @@ int main (int argc, char* argv[]) {
 
     miss_lines(3, fp1);
 
-    printf("generation_number,fitness,critical_path,max_fanin,max_fanout,op_type,op_num,node_count,RCA,CSLA,BE_CSLA\n");
+    //printf("generation_number,fitness,critical_path,max_fanin,max_fanout,op_type,op_num,node_count,RCA,CSLA,BE_CSLA\n");
     
     for (int i = 0; i < generation_count; i++) {
 
@@ -87,8 +87,10 @@ int main (int argc, char* argv[]) {
             fscanf(fp1, "%s %s %d\n", name, name, &BE_CSLA_number);
             miss_lines(1, fp1);
 
-            printf("%d,%f,%d,%d,%d,%s,%d,%d,%d,%d,%d\n", 
-                generation_number, current_fitness, critical_path, max_fanin, max_fanout, op, op_number, node_count, RCA_number, CSLA_number, BE_CSLA_number);
+            if ( j == 0 ) {
+                printf("%d,%f,%d,%d,%d,%s,%d,%d,%d,%d,%d\n", 
+                    generation_number, current_fitness, critical_path, max_fanin, max_fanout, op, op_number, node_count, RCA_number, CSLA_number, BE_CSLA_number);
+            }
 
             // if ( j == 0 )
             //     printf("\tparent fitness: -%f-\n", current_fitness);
