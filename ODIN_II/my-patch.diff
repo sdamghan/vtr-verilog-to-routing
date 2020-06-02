@@ -1,0 +1,4666 @@
+diff --git a/ODIN_II/SRC/adders.cpp b/ODIN_II/SRC/adders.cpp
+index a01f4ea37..7b599be24 100644
+--- a/ODIN_II/SRC/adders.cpp
++++ b/ODIN_II/SRC/adders.cpp
+@@ -1238,19 +1238,139 @@ static nnode_t* make_adder(operation_list funct, nnode_t* current_adder, nnode_t
+     return new_funct;
+ }
+ 
+-void instantiate_add_w_carry_block(int* width, nnode_t* node, short mark, netlist_t* netlist, short subtraction) {
+-    nnode_t* previous_carry = (subtraction) ? netlist->vcc_node : netlist->gnd_node;
++/*---------------------------------------------------------------------------------------------
++ * makes a 2 to 1 mux (select == 1)? port_a : port_b
++ *-------------------------------------------------------------------------------------------*/
++static nnode_t* make_mux_2to1(nnode_t* select, nnode_t* port_a, nnode_t* port_b, nnode_t* node, short mark) {
++    nnode_t* mux_2 = make_2port_gate(MUX_2, 2, 2, 1, node, mark);
++
++    //driver
++    nnode_t* notted_gate = make_not_gate(node, mark);
++    connect_nodes(select, 0, notted_gate, 0);
++
++    connect_nodes(select, 0, mux_2, 0);
++    connect_nodes(notted_gate, 0, mux_2, 1);
+ 
+-    for (int i = 0; i < width[0]; i++) {
+-        /* set of flags for building purposes */
+-        short construct_last_carry_flag = (i != width[0] - 1 || !subtraction) ? 1 : 0;
++    //connect carry skip to mux
++    connect_nodes(port_a, 0, mux_2, 2);
++    connect_nodes(port_b, 0, mux_2, 3);
++    return mux_2;
++}
+ 
+-        //build Ripple Carry Adder
+-        nnode_t* current_adder = make_adder(ADDER_FUNC, NULL, previous_carry, width, i, netlist, node, subtraction, mark);
+-        if (construct_last_carry_flag)
+-            previous_carry = make_adder(CARRY_FUNC, current_adder, previous_carry, width, i, netlist, node, subtraction, mark);
++static nnode_t* make_bec(operation_list funct, nnode_t* current_adder, nnode_t* previous_carry, int* /* width */, int /* current_pin */, netlist_t* netlist, nnode_t* node, short /* subtraction */, short mark) {
++    nnode_t* new_funct = NULL;
++    if (previous_carry == netlist->vcc_node) {
++        if (funct == ADDER_FUNC) {
++            new_funct = make_not_gate(node, mark);
++            connect_nodes(current_adder, 0, new_funct, 0);
++        } else if (funct == CARRY_FUNC) {
++            new_funct = current_adder;
++        }
++    } else if (previous_carry == netlist->gnd_node) {
++        if (funct == ADDER_FUNC) {
++            new_funct = current_adder;
++        } else if (funct == CARRY_FUNC) {
++            new_funct = netlist->gnd_node;
++        }
++    } else {
++        if (funct == ADDER_FUNC) {
++            new_funct = make_2port_gate(LOGICAL_XOR, 1, 1, 1, node, mark);
++            connect_nodes(previous_carry, 0, new_funct, 0);
++            connect_nodes(current_adder, 0, new_funct, 1);
++        } else if (funct == CARRY_FUNC) {
++            new_funct = make_2port_gate(LOGICAL_AND, 1, 1, 1, node, mark);
++            connect_nodes(previous_carry, 0, new_funct, 0);
++            connect_nodes(current_adder, 0, new_funct, 1);
++        }
++    }
++    return new_funct;
++}
+ 
+-        connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
++// void instantiate_add_w_carry_block(int* width, nnode_t* node, short mark, netlist_t* netlist, short subtraction) {
++//     nnode_t* previous_carry = (subtraction) ? netlist->vcc_node : netlist->gnd_node;
++
++//     for (int i = 0; i < width[0]; i++) {
++//         /* set of flags for building purposes */
++//         short construct_last_carry_flag = (i != width[0] - 1 || !subtraction) ? 1 : 0;
++
++//         //build Ripple Carry Adder
++//         nnode_t* current_adder = make_adder(ADDER_FUNC, NULL, previous_carry, width, i, netlist, node, subtraction, mark);
++//         if (construct_last_carry_flag)
++//             previous_carry = make_adder(CARRY_FUNC, current_adder, previous_carry, width, i, netlist, node, subtraction, mark);
++
++//         connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
++//     }
++// }
++void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node, short mark, netlist_t* netlist, short subtraction) {
++    //set the default
++    int blk_size = width[0];
++    nnode_t* initial_carry = (subtraction) ? netlist->vcc_node : netlist->gnd_node;
++
++    for (int start_pin = 0, current_counter = 1; start_pin < width[0]; start_pin += blk_size, current_counter++) {
++        blk_size = width[0] - start_pin;
++        nnode_t* previous_carry = initial_carry;
++        nnode_t* previous_carry_gnd = netlist->gnd_node;
++        nnode_t* previous_carry_vcc = netlist->vcc_node;
++
++        for (int i = start_pin; i < start_pin + blk_size; i++) {
++            /* set of flags for building purposes */
++            short construct_last_carry_flag = (i != width[0] - 1 || !subtraction) ? 1 : 0;
++            short last_pin_on_blk_flag = (i == start_pin + blk_size - 1) ? 1 : 0;
++
++            switch (type) {
++                // Ripple Carry Adder
++                case RCA: {
++                    //build adder
++                    nnode_t* current_adder = make_adder(ADDER_FUNC, NULL, previous_carry, width, i, netlist, node, subtraction, mark);
++                    if (construct_last_carry_flag)
++                        previous_carry = make_adder(CARRY_FUNC, current_adder, previous_carry, width, i, netlist, node, subtraction, mark);
++
++                    connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
++                    break;
++                }
++                //Carry Select Adder
++                case CSLA: {
++                    nnode_t* current_adder_gnd = make_adder(ADDER_FUNC, NULL, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
++                    if (construct_last_carry_flag)
++                        previous_carry_gnd = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
++
++                    nnode_t* current_adder_vcc = make_adder(ADDER_FUNC, current_adder_gnd, previous_carry_vcc, width, i, netlist, node, subtraction, mark);
++                    if (construct_last_carry_flag)
++                        previous_carry_vcc = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_vcc, width, i, netlist, node, subtraction, mark);
++
++                    nnode_t* current_adder = make_mux_2to1(previous_carry, current_adder_vcc, current_adder_gnd, node, mark);
++
++                    if (last_pin_on_blk_flag && construct_last_carry_flag)
++                        previous_carry = make_mux_2to1(previous_carry, previous_carry_vcc, previous_carry_gnd, node, mark);
++
++                    connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
++                    break;
++                }
++                //binary to excess Carry Select Adder
++                case BE_CSLA: {
++                    nnode_t* current_adder_gnd = make_adder(ADDER_FUNC, NULL, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
++                    if (construct_last_carry_flag)
++                        previous_carry_gnd = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
++
++                    nnode_t* current_adder_vcc = make_bec(ADDER_FUNC, current_adder_gnd, previous_carry_vcc, width, i, netlist, node, subtraction, mark);
++                    if (construct_last_carry_flag)
++                        previous_carry_vcc = make_bec(CARRY_FUNC, current_adder_gnd, previous_carry_vcc, width, i, netlist, node, subtraction, mark);
++
++                    nnode_t* current_adder = make_mux_2to1(previous_carry, current_adder_vcc, current_adder_gnd, node, mark);
++
++                    if (last_pin_on_blk_flag && construct_last_carry_flag)
++                        previous_carry = make_mux_2to1(previous_carry, previous_carry_vcc, previous_carry_gnd, node, mark);
++
++                    connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
++                    break;
++                }
++                default: {
++                    error_message(NETLIST, -1, -1, "( %d )is not a valid type", type);
++                    return;
++                }
++            }
++        }
++        initial_carry = previous_carry;
+     }
+ }
+ 
+diff --git a/ODIN_II/SRC/enum_str.cpp b/ODIN_II/SRC/enum_str.cpp
+index 9a97f005b..a78d95938 100644
+--- a/ODIN_II/SRC/enum_str.cpp
++++ b/ODIN_II/SRC/enum_str.cpp
+@@ -181,4 +181,10 @@ const char* ids_STR[] = {
+     "HARD_BLOCK_CONNECT",
+     // EDDIE: new enum value for ids to replace MEMORY from operation_t
+     "RAM",
+-    "ids_END"};
+\ No newline at end of file
++    "ids_END"};
++
++    const char* adder_type_STR[] = {
++    "RCA",     // default, ripple carry adder
++   "CSLA",    // carry select adder
++   "BE_CSLA", // binary excess carry select adder
++    "adder_type_END"};
+\ No newline at end of file
+diff --git a/ODIN_II/SRC/ga_partial_map.cpp b/ODIN_II/SRC/ga_partial_map.cpp
+new file mode 100644
+index 000000000..d4bc896f5
+--- /dev/null
++++ b/ODIN_II/SRC/ga_partial_map.cpp
+@@ -0,0 +1,389 @@
++
++#include "odin_types.h"
++#include "odin_globals.h"
++#include "netlist_visualizer.h"
++
++#include "netlist_utils.h"
++#include "node_creation_library.h"
++#include "odin_util.h"
++
++#include "partial_map.h"
++#include "multipliers.h"
++#include "hard_blocks.h"
++#include "math.h"
++#include "memories.h"
++#include "adders.h"
++#include "subtractions.h"
++#include "vtr_memory.h"
++#include "vtr_util.h"
++#include "vtr_random.h"
++
++
++#include "ga_partial_map.h"
++#include "netlist_statistic.h"
++
++#define fmt_len 16
++#define tbl_width 4
++#define block_len (fmt_len * tbl_width)
++#define NARROW_PAD "---------------------------"
++#define WIDE_PAD "==========================="
++
++connection_t* new_connection(nnode_t* parent);
++void free_connection_subtree(connection_t* to_delete);
++stat_t* get_stats(connection_t* conn, netlist_t* netlist, short traverse_number);
++connection_t* instantiate_subgraph(nnode_t* original_node, ga_type_e type, instantiate_logic_fn_t fn, short mark, netlist_t* netlist);
++
++ga_type_e* generation_stat(ga_type_e* src, int population_size);
++ga_type_e* new_generation(int population_size, ga_type_e initial_type);
++ga_type_e* new_mutation(ga_type_e* src, int population_size, int type_length);
++
++void free_ga_items_in_list(ga_t* list);
++
++double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number, metric_t* current_values);
++// void set_golden_standard(ga_t* list, netlist_t* netlist, short traverse_number, metric_t* golden_values);
++
++/*----------------------------------------------------------------------new_generation
++ * (function: partial_map_ga_item_top) 
++ *--------------------------------------------------------------------*/
++ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_number) {
++    // if we have items in the list we apply GA mapping
++    ga_type_e* best_generation = NULL;
++    if (list->size) {
++        metric_t current_values;
++        // set_golden_standard(list, netlist, traverse_number, &golden_values);
++        print_header();
++        best_generation = new_generation(list->size, list->initial_type);
++        double best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number, &current_values );
++        ga_type_e* best_mutation = best_generation;
++
++        if (global_args.ga_partial_map.provenance() == argparse::Provenance::SPECIFIED) {
++            for (int i = 0; i < configuration.generation_count; i += 1) {
++                best_mutation = best_generation;
++
++                printf(">Generation_number %d\n", i);
++                printf("parent_fitness %f\n", best_fit);
++                print_type_stat(&current_values, list, best_mutation, netlist);
++
++                for (int j = 1; j < configuration.generation_size; j += 1) {
++                    ga_type_e* mutation = new_mutation(best_generation, list->size, list->type_length);
++                    double current_fit = partial_map_ga_item(list, mutation, netlist, traverse_number, &current_values );
++
++                    printf("current_fitness %lf\n", current_fit);
++
++                    print_type_stat(&current_values, list, mutation, netlist);
++
++                    if (current_fit < best_fit) {
++                        if (best_mutation != best_generation) {
++                            //vtr::free(best_mutation);
++                        }
++                        best_mutation = mutation;
++                        best_fit = current_fit;
++                    } else {
++                        //vtr::free(mutation);
++                    }
++                }
++                if (best_generation != best_mutation) {
++                    //vtr::free(best_generation);
++                    best_generation = best_mutation;
++                    best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number, &current_values );
++                    // set_golden_standard(list, best_generation, netlist, traverse_number, &golden_values);
++                    // force to recompute the whole tree
++                    traverse_number += 1;
++                    compute_statistics(netlist, traverse_number);
++                }
++            }
++        }
++    }
++    return best_generation;
++}
++
++/*----------------------------------------------------------------------
++ * (function: partial_map_adders) This function employ the new type of 
++ * adders into the adder list and after that, it instantiates adders and 
++ * shrinks them into logics
++ *--------------------------------------------------------------------*/
++double partial_map_ga_item(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number, metric_t *current_values ) {
++    init(current_values);
++
++    for (int i = 0; i < list->size; i += 1) {
++        connection_t* conn = list->connectivity[type_list[i]][i];
++
++        if (conn != NULL) {
++            // we have the connections, we can simply remap the I/O
++            reattach_connection(conn);
++        } else {
++            conn = instantiate_subgraph(list->node[i],
++                                        type_list[i],
++                                        list->instantiate_soft_logic,
++                                        -1, // force a later recomputation
++                                        netlist);
++        }
++        list->connectivity[type_list[i]][i] = conn;
++
++        stat_t* node_stat = get_stats(conn, netlist, traverse_number);
++
++        add_into(current_values, &node_stat->upward);
++        add_into(current_values, &node_stat->downward);
++
++        // print_stats(&current_values);
++
++        delete_stat(node_stat);
++    }
++    // return distance_to_goal(golden_values, &current_values);
++    return fitness_calc(netlist, current_values);
++}
++
++// /*----------------------------------------------------------------------
++//  * (function: partial_map_adders) This function employ the new type of 
++//  * adders into the adder list and after that, it instantiates adders and 
++//  * shrinks them into logics
++//  *--------------------------------------------------------------------*/
++// void set_golden_standard(ga_t* list, ga_type_e* type_list, netlist_t* netlist, short traverse_number, metric_t* golden_values) {
++//     init(golden_values);
++
++//     for (int i = 0; i < list->size; i += 1) {
++//         connection_t* conn = list->connectivity[type_list[i]][i];
++
++//         if (conn != NULL) {
++//             // we have the connections, we can simply remap the I/O
++//             reattach_connection(conn);
++//         } else {
++//             conn = instantiate_subgraph(list->node[i],
++//                                         type_list[i],
++//                                         list->instantiate_soft_logic,
++//                                         -1, // force a later recomputation
++//                                         netlist);
++//         }
++//         list->connectivity[type_list[i]][i] = conn;
++
++//         net_stat_t* node_stat = get_stats(conn, netlist, traverse_number);
++
++//         add_into(golden_values, &node_stat->upward);
++//         add_into(golden_values, &node_stat->downward);
++
++//         // print_stats(&golden_values);
++
++//         delete_stat(node_stat);
++//     }
++// }
++
++connection_t* new_connection(nnode_t* parent) {
++    connection_t* connection = NULL;
++    if (parent) {
++        connection = (connection_t*)vtr::calloc(1, sizeof(connection_t));
++        // get the current stats
++        connection->input = init_signal_list();
++        if (parent->input_pins
++            && parent->num_input_pins) {
++            connection->input->count = parent->num_input_pins;
++            connection->input->pins = (npin_t**)vtr::calloc(parent->num_input_pins, sizeof(npin_t*));
++            for (int i = 0; i < connection->input->count; i += 1) {
++                // directly copy the pointer here
++                connection->input->pins[i] = parent->input_pins[i];
++            }
++        }
++
++        connection->output = init_signal_list();
++        if (parent->output_pins
++            && parent->num_output_pins) {
++            connection->output->count = parent->num_output_pins;
++            connection->output->pins = (npin_t**)vtr::calloc(parent->num_output_pins, sizeof(npin_t*));
++            for (int i = 0; i < connection->output->count; i += 1) {
++                // directly copy the pointer here
++                connection->output->pins[i] = parent->output_pins[i];
++            }
++        }
++    }
++
++    return connection;
++}
++
++void reattach_connection(connection_t* conn) {
++    reattach(conn->input, UPWARD);
++    reattach(conn->output, DOWNWARD);
++}
++
++stat_t* get_stats(connection_t* conn, netlist_t* netlist, short traverse_number) {
++    return get_stats(conn->input, conn->output, netlist, traverse_number);
++}
++
++void free_connection_subtree(connection_t* to_delete) {
++    if (to_delete) {
++        recursive_remove_subtree(to_delete->input, to_delete->output);
++        //free leftover pins alloc'd
++        for (int k = 0; k < to_delete->input->count; k += 1) {
++            free_npin(to_delete->input->pins[k]);
++        }
++        for (int k = 0; k < to_delete->output->count; k += 1) {
++            free_npin(to_delete->output->pins[k]);
++        }
++    }
++    free_connection(to_delete);
++}
++
++void free_connection(connection_t* to_delete) {
++    if (to_delete) {
++        free_signal_list(to_delete->input);
++        to_delete->input = NULL;
++        free_signal_list(to_delete->output);
++        to_delete->output = NULL;
++        vtr::free(to_delete);
++        to_delete = NULL;
++    }
++}
++
++ga_t* new_ga_t(instantiate_logic_fn_t instantiate_soft_logic, int type_length, int initial_type, operation_list op) {
++    ga_t* ga_item_list = (ga_t*)vtr::calloc(1, sizeof(ga_t));
++
++    ga_item_list->node = NULL;
++    ga_item_list->op = op;
++    ga_item_list->size = 0;
++    ga_item_list->instantiate_soft_logic = instantiate_soft_logic;
++    ga_item_list->type_length = type_length;
++    ga_item_list->initial_type = initial_type;
++    ga_item_list->connectivity = (connection_t***)vtr::calloc(type_length, sizeof(connection_t**));
++
++    return ga_item_list;
++}
++
++void add_to_ga_t(ga_t* list, nnode_t* node) {
++    if (node) {
++        list->node = (nnode_t**)vtr::realloc(list->node, sizeof(nnode_t*) * (list->size + 1));
++        list->node[list->size] = node;
++
++        for (int i = 0; i < list->type_length; i++) {
++            list->connectivity[i] = (connection_t**)vtr::realloc(list->connectivity[i], sizeof(connection_t*) * (list->size + 1));
++            list->connectivity[i][list->size] = NULL;
++        }
++
++        list->size += 1;
++    }
++}
++
++connection_t* instantiate_subgraph(nnode_t* original_node, ga_type_e type, instantiate_logic_fn_t fn, short mark, netlist_t* netlist) {
++    nnode_t* node_duplicate = duplicate_nnode(original_node);
++    connection_t* conn = new_connection(node_duplicate);
++    fn(type, node_duplicate, mark, netlist);
++    return conn;
++}
++
++void free_ga_items_in_list(ga_t* list) {
++    if (list) {
++        if (list->node) {
++            for (int i = 0; i < list->size; i++) {
++                /* TODO: fix this */
++                // free_nnode(list->node[i]);
++            }
++            vtr::free(list->node);
++            list->node = NULL;
++        }
++        if (list->connectivity) {
++            for (int i = 0; i < list->type_length; i++) {
++                for (int j = 0; j < list->size; j++) {
++                    /* TODO: fix this */
++                    // free_connection_subtree(list->connectivity[i][j]);
++                }
++                vtr::free(list->connectivity[i]);
++            }
++
++            vtr::free(list->connectivity);
++            list->connectivity = NULL;
++        }
++    }
++}
++
++ga_t* free_ga_t(ga_t* list) {
++    if (list) {
++        free_ga_items_in_list(list);
++        vtr::free(list);
++        list = NULL;
++    }
++    return list;
++}
++
++/*--------------------------------------------------------------------- 
++ * This function creates a new generation. It changes the values of the 
++ * genes by doing mutation. In each generation, except of the first one,
++ * the parent of the next generation will be the fittest chromosome in 
++ * the previous generation.
++ *--------------------------------------------------------------------*/
++ga_type_e* new_generation(int population_size, ga_type_e initial_type) {
++    // Initilization of new generation
++    ga_type_e* generation = (ga_type_e*)vtr::malloc(population_size * sizeof(ga_type_e));
++    memset(generation, initial_type, population_size * sizeof(ga_type_e));
++    return generation;
++}
++
++/*--------------------------------------------------------------------- 
++ * This function changes the value of the genes in the given chromosome.
++ * Based on the specified mutation rate, it finds the position of genes 
++ * which should be mutated randomly, and after that, it changes their 
++ * values through rand function.
++ *--------------------------------------------------------------------*/
++ga_type_e* new_mutation(ga_type_e* src, int population_size, int type_length) {
++    // Initilization of new generation
++
++    time_t t;
++    ga_type_e* new_mutation = (ga_type_e*)vtr::malloc(population_size * sizeof(ga_type_e));
++    memcpy(new_mutation, src, sizeof(ga_type_e) * population_size);
++
++    // srand((unsigned) time(&t));
++
++    // Find a point and flip the chromosome from there
++    // int cross_point = rand % num_of_adders;
++    // Find points based on the mutation rate and change their values randomly
++
++    int mutation_count = configuration.mutation_rate * population_size;
++    mutation_count = std::min(population_size, mutation_count);
++
++    for (int count = 0; count < mutation_count; count += 1) {
++        int i = vtr::irand(population_size); //rand() % population_size;
++        new_mutation[i] = (ga_type_e)(rand() % type_length);
++    }
++
++    return new_mutation;
++}
++
++/******************************************
++ * helper functions
++ */
++void print_header() {
++    printf("%s\n", WIDE_PAD);
++    printf("Physical Mapping statistics\n");
++    printf("%-*s %-*s %-*s\n",
++           fmt_len, "Logic Type",
++           fmt_len, "Count",
++           fmt_len, "Nets");
++}
++
++void print_type_stat(metric_t *current_values, ga_t* list, ga_type_e* mapping, netlist_t* netlist) {
++    long long* type_count = (long long*)vtr::calloc(list->type_length, sizeof(long long));
++    const char* op_name
++        = name_based_on_op(list->op);
++    long long op_count = list->size;
++
++    for (int i = 0; i < list->size; i += 1) {
++        type_count[mapping[i]] += 1;
++    }
++
++    long long net_count_after = netlist->total_net_count;
++
++    printf("max_depth: %d\nmax_fan-in: %d\nmax_fan-out: %d\n", 
++              (int)current_values->max_depth, -1, -1);
++
++    printf("%-*s %-*lld %-*lld\n",
++           fmt_len, op_name,
++           fmt_len, op_count,
++           fmt_len, net_count_after);
++
++    for (int i = 0; i < list->type_length; i++) {
++        std::string type_name = "  - ";
++        type_name += name_based_on_type((adder_type_e)i);
++
++        printf("%-*s %-*lld\n",
++               fmt_len, type_name.c_str(),
++               fmt_len, type_count[i]);
++    }
++
++    printf("%s\n", NARROW_PAD);
++}
+\ No newline at end of file
+diff --git a/ODIN_II/SRC/include/adders.h b/ODIN_II/SRC/include/adders.h
+index fdda5ec31..7c03426e7 100644
+--- a/ODIN_II/SRC/include/adders.h
++++ b/ODIN_II/SRC/include/adders.h
+@@ -75,7 +75,7 @@ void reallocate_pins(nnode_t* node, nnode_t* next_node);
+ void free_op_nodes(nnode_t* node);
+ int match_pins(nnode_t* node, nnode_t* next_node);
+ 
+-void instantiate_add_w_carry_block(int* width, nnode_t* node, short mark, netlist_t* netlist, short subtraction);
++void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node, short mark, netlist_t* netlist, short subtraction);
+ bool is_ast_adder(ast_node_t* node);
+ 
+ #endif // ADDERS_H
+diff --git a/ODIN_II/SRC/include/config_t.h b/ODIN_II/SRC/include/config_t.h
+index 061372f99..279e4ca94 100644
+--- a/ODIN_II/SRC/include/config_t.h
++++ b/ODIN_II/SRC/include/config_t.h
+@@ -47,6 +47,12 @@ struct config_t {
+     int soft_logic_memory_width_threshold;
+ 
+     std::string arch_file; // Name of the FPGA architecture file
++
++    // for ga
++    double ga_partial_map;            // enable genetic algorithm for adder configuration
++    double mutation_rate;
++    int generation_size;
++    int generation_count;
+ };
+ 
+ extern config_t configuration;
+diff --git a/ODIN_II/SRC/include/ga_adder.hpp b/ODIN_II/SRC/include/ga_adder.hpp
+new file mode 100644
+index 000000000..74ada85ce
+--- /dev/null
++++ b/ODIN_II/SRC/include/ga_adder.hpp
+@@ -0,0 +1,47 @@
++#include "odin_types.h"
++#include "adders.h"
++
++#define GENERATION_SIZE 6
++
++// Definitions
++struct generation_t 
++{
++    adder_type_e **chromosomes;
++    adder_type_e *fittest;
++    int   *fitnesses;
++};
++
++struct adder_t {
++
++    adder_type_e type = RCA;
++
++    signal_list_t *input;
++    signal_list_t *output;
++
++    nnode_t *node;
++};
++
++/**
++ * TODO !!! use this for each generation, parent is generation[0]
++ * 
++struct adder_list_t
++{
++    adder_type_e *chromosome;
++    adder_t **adders;
++    int size;
++};
++
++ */
++
++// Declarations
++void instantiate_soft_adder(nnode_t *node, short mark, netlist_t *netlist);
++adder_t* allocate_adder_t ();
++void partial_map_adders_top(netlist_t *netlist);
++void partial_map_adders(/*short traverse_number,*/ netlist_t *netlist);
++void destroy_adders();
++void destroy_adder_cloud (adder_t *adder);
++void recursive_save_pointers (adder_t *adder, nnode_t * node);
++npin_t** make_copy_of_pins (npin_t **copy, long copy_size);
++adder_t *create_empty_adder (adder_t *previous_adder);
++generation_t* create_generation (generation_t *previous_generation, int generation_counter);
++adder_type_e *mutate (adder_type_e *parent);
+\ No newline at end of file
+diff --git a/ODIN_II/SRC/include/ga_partial_map.h b/ODIN_II/SRC/include/ga_partial_map.h
+new file mode 100644
+index 000000000..94cad1a47
+--- /dev/null
++++ b/ODIN_II/SRC/include/ga_partial_map.h
+@@ -0,0 +1,42 @@
++#ifndef GA_PARTIAL_MAP_H
++#define GA_PARTIAL_MAP_H
++
++#include "odin_types.h"
++
++typedef short ga_type_e;
++typedef void (*instantiate_logic_fn_t)(ga_type_e, nnode_t*, short, netlist_t*);
++
++struct connection_t {
++    signal_list_t* input;
++    signal_list_t* output;
++};
++
++struct ga_t {
++    operation_list op;
++    nnode_t** node;
++    connection_t*** connectivity;
++    int size;
++
++    instantiate_logic_fn_t instantiate_soft_logic;
++    int type_length;
++    int initial_type;
++};
++
++// Declarations
++ga_t* new_ga_t(instantiate_logic_fn_t instantiate_soft_logic,
++               int type_length,
++               int initial_type,
++               operation_list op);
++
++void add_to_ga_t(ga_t* list, nnode_t* node);
++ga_t* free_ga_t(ga_t* list);
++
++ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_number);
++void reattach_connection(connection_t* conn);
++void free_connection(connection_t* to_delete);
++
++void print_header();
++
++void print_type_stat(metric_t *current_values, ga_t* list, ga_type_e* mapping, netlist_t* netlist);
++
++#endif //GA_PARTIAL_MAP_H
+diff --git a/ODIN_II/SRC/include/netlist_statistic.h b/ODIN_II/SRC/include/netlist_statistic.h
+index ff12c86ed..129f437d4 100644
+--- a/ODIN_II/SRC/include/netlist_statistic.h
++++ b/ODIN_II/SRC/include/netlist_statistic.h
+@@ -11,6 +11,9 @@ stat_t* get_stats(nnet_t* net, netlist_t* netlist, uintptr_t traverse_mark_numbe
+ 
+ stat_t* delete_stat(stat_t* stat);
+ 
++void init(metric_t* m);
++void add_into(metric_t* dest, metric_t* src);
++double fitness_calc (netlist_t* netlist, metric_t* m);
+ void init_stat(netlist_t* netlist);
+ void compute_statistics(netlist_t* netlist, bool display);
+ 
+diff --git a/ODIN_II/SRC/include/netlist_utils.h b/ODIN_II/SRC/include/netlist_utils.h
+index 7b94dc41d..bed6a6b75 100644
+--- a/ODIN_II/SRC/include/netlist_utils.h
++++ b/ODIN_II/SRC/include/netlist_utils.h
+@@ -13,9 +13,33 @@ npin_t* allocate_npin();
+ npin_t* get_zero_pin(netlist_t* netlist);
+ npin_t* get_pad_pin(netlist_t* netlist);
+ npin_t* get_one_pin(netlist_t* netlist);
++
++/////mehrshad
++nnode_t* duplicate_nnode(nnode_t* node);
++/////mehrshad
++
+ npin_t* copy_input_npin(npin_t* copy_pin);
+ npin_t* copy_output_npin(npin_t* copy_pin);
+ nnet_t* allocate_nnet();
++
++/////mehrshad
++void reattach(npin_t* pin, direction_e direction);
++void reattach(signal_list_t* signals, direction_e direction);
++void reattach(nnet_t* net, direction_e direction);
++void reattach(nnode_t* node, direction_e direction);
++
++npin_t* attach(npin_t* pin, nnet_t* net, direction_e direction);
++npin_t* attach(npin_t* pin, nnode_t* node, direction_e direction);
++
++void detach(npin_t* pin, direction_e direction);
++void detach(nnode_t* to_free, direction_e direction);
++void detach(nnet_t* to_free, direction_e direction);
++
++void free_nnode_pins(nnode_t* to_free, direction_e direction);
++nnode_t* free_nnode_retain_all_content(nnode_t* to_free);
++nnode_t* free_nnode_retain_pins(nnode_t* to_free);
++//////////mehrshad
++
+ nnode_t* free_nnode(nnode_t* to_free);
+ npin_t* free_npin(npin_t* to_free);
+ nnet_t* free_nnet(nnet_t* to_free);
+@@ -45,6 +69,18 @@ signal_list_t* combine_lists(signal_list_t** signal_lists, int num_signal_lists)
+ signal_list_t* combine_lists_without_freeing_originals(signal_list_t** signal_lists, int num_signal_lists);
+ signal_list_t* copy_input_signals(signal_list_t* signalsvar);
+ signal_list_t* copy_output_signals(signal_list_t* signalsvar);
++
++/////mehrshad
++signal_list_t* copy_input_signals(nnode_t* node);
++signal_list_t* copy_output_signals(nnode_t* node);
++
++
++void recursive_remove_subtree(signal_list_t* input_signals, signal_list_t* output_signals);
++nnet_t* recursive_remove_subtree(signal_list_t* signals, nnet_t* net, ids signal_type, direction_e direction);
++nnode_t* recursive_remove_subtree(signal_list_t* signals, nnode_t* node, ids signal_type, direction_e direction);
++npin_t* recursive_remove_subtree(signal_list_t* signals, npin_t* pin, ids signal_type, direction_e direction);
++/////mehrshad
++
+ void free_signal_list(signal_list_t* list);
+ 
+ void hookup_hb_input_pins_from_signal_list(nnode_t* node, int n_start_idx, signal_list_t* input_list, int il_start_idx, int width, netlist_t* netlist);
+diff --git a/ODIN_II/SRC/include/odin_types.h b/ODIN_II/SRC/include/odin_types.h
+index 1d40c37b1..32f0b5e75 100644
+--- a/ODIN_II/SRC/include/odin_types.h
++++ b/ODIN_II/SRC/include/odin_types.h
+@@ -56,6 +56,7 @@
+ #define ODIN_STD_BITWIDTH (sizeof(long) * 8)
+ 
+ /* unique numbers to mark the nodes as we DFS traverse the netlist */
++#define PARTIAL_MAP_TRAVERSE_VALUE_GA_ADDERS 11
+ #define PARTIAL_MAP_TRAVERSE_VALUE 10
+ #define OUTPUT_TRAVERSE_VALUE 12
+ #define COUNT_NODES 14 /* NOTE that you can't call countnodes one after the other or the mark will be incorrect */
+@@ -100,6 +101,10 @@ struct global_args_t {
+     argparse::ArgValue<bool> show_help;
+ 
+     argparse::ArgValue<std::string> adder_def; //DEPRECATED
++      argparse::ArgValue<double> ga_partial_map;   // enable ga_partial_map
++        argparse::ArgValue<double> ga_partial_map_mr;
++        argparse::ArgValue<double> ga_partial_map_gs;
++        argparse::ArgValue<double> ga_partial_map_gc;
+ 
+     // defines if the first cin of an adder/subtractor is connected to a global gnd/vdd
+     // or generated using a dummy adder with both inputs set to gnd/vdd
+@@ -332,6 +337,24 @@ enum ids {
+     ids_END
+ };
+ 
++enum adder_type_e {
++    RCA,     // default, ripple carry adder
++    CSLA,    // carry select adder
++    BE_CSLA, // binary excess carry select adder
++    adder_type_END
++};
++
++enum direction_e {
++    UPWARD,
++    DOWNWARD,
++};
++
++enum branching_type_e {
++    FANIN,
++    FANOUT,
++    branching_type_END
++};
++
+ struct metric_t {
+     double min_depth;
+     double max_depth;
+@@ -597,6 +620,11 @@ struct netlist_t {
+     metric_t output_node_stat;
+ 
+     t_logical_block_type_ptr type;
++
++        /****************************
++     * statistic of the circuit
++     */
++    long long total_net_count;
+ };
+ 
+ #endif
+diff --git a/ODIN_II/SRC/include/odin_util.h b/ODIN_II/SRC/include/odin_util.h
+index b48b1926f..69ab5df5b 100644
+--- a/ODIN_II/SRC/include/odin_util.h
++++ b/ODIN_II/SRC/include/odin_util.h
+@@ -16,6 +16,7 @@ FILE* open_file(const char* file_name, const char* open_type);
+ 
+ const char* name_based_on_op(operation_list op);
+ const char* name_based_on_ids(ids op);
++const char* name_based_on_type(adder_type_e type);
+ const char* node_name_based_on_op(nnode_t* node);
+ const char* ast_node_name_based_on_ids(ast_node_t* node);
+ 
+diff --git a/ODIN_II/SRC/include/partial_map.h b/ODIN_II/SRC/include/partial_map.h
+index 68e3a827c..e0f8f3334 100644
+--- a/ODIN_II/SRC/include/partial_map.h
++++ b/ODIN_II/SRC/include/partial_map.h
+@@ -26,9 +26,11 @@
+ #ifndef PARTIAL_MAP_H
+ #define PARTIAL_MAP_H
+ 
++#include "odin_types.h"
++
+ // PROTOTYPES
+ void partial_map_top(netlist_t* netlist);
+-void instantiate_add_w_carry(nnode_t* node, short mark, netlist_t* netlist);
++void instantiate_add_w_carry(adder_type_e type, nnode_t* node, short mark, netlist_t* netlist);
+ void instantiate_multi_port_mux(nnode_t* node, short mark, netlist_t* netlist);
+ 
+ #endif
+diff --git a/ODIN_II/SRC/include/registered_ga_items.h b/ODIN_II/SRC/include/registered_ga_items.h
+new file mode 100644
+index 000000000..7a90dfb1b
+--- /dev/null
++++ b/ODIN_II/SRC/include/registered_ga_items.h
+@@ -0,0 +1,11 @@
++#ifndef REGISTERED_GA_ITEMS_H
++#define REGISTERED_GA_ITEMS_H
++
++#include "odin_types.h"
++
++void register_ga();
++
++void GA_partial_map_top(netlist_t* netlist);
++void add_to_ga(nnode_t* node);
++
++#endif // REGISTERED_GA_ITEMS_H
+\ No newline at end of file
+diff --git a/ODIN_II/SRC/multipliers.cpp b/ODIN_II/SRC/multipliers.cpp
+index a1076d4d3..f6c76f0c3 100644
+--- a/ODIN_II/SRC/multipliers.cpp
++++ b/ODIN_II/SRC/multipliers.cpp
+@@ -212,7 +212,7 @@ void instantiate_simple_soft_multiplier(nnode_t* node, short mark, netlist_t* ne
+ 
+     /* soft map the adders if they need to be mapped */
+     for (i = 0; i < multiplicand_width - 1; i++) {
+-        instantiate_add_w_carry(adders_for_partial_products[i], mark, netlist);
++        instantiate_add_w_carry(RCA, adders_for_partial_products[i], mark, netlist);
+     }
+ 
+     /* Cleanup everything */
+diff --git a/ODIN_II/SRC/netlist_statistic.cpp b/ODIN_II/SRC/netlist_statistic.cpp
+index 2491f5998..88a356e38 100644
+--- a/ODIN_II/SRC/netlist_statistic.cpp
++++ b/ODIN_II/SRC/netlist_statistic.cpp
+@@ -13,13 +13,14 @@
+ #include "vtr_memory.h"
+ 
+ #define UNUSED_NODE_TYPE -1
+-static void init(metric_t* m);
++// static void init(metric_t* m);
+ static void print_stats(metric_t* m);
+ static void copy(metric_t* dest, metric_t* src);
+ 
+ static void add_to_stat(metric_t* dest, long long branching_factor);
+ static void count_node_type(nnode_t* node, netlist_t* netlist);
+ 
++
+ static metric_t* get_upward_stat(nnet_t* net, netlist_t* netlist, uintptr_t traverse_mark_number);
+ static metric_t* get_downward_stat(nnet_t* net, netlist_t* netlist, uintptr_t traverse_mark_number);
+ static metric_t* get_upward_stat(nnode_t* node, netlist_t* netlist, uintptr_t traverse_mark_number);
+@@ -32,7 +33,7 @@ static metric_t* get_upward_stat(metric_t* destination, nnode_t** node_list, lon
+ static metric_t* get_downward_stat(metric_t* destination, nnet_t** net_list, long long net_count, netlist_t* netlist, uintptr_t traverse_mark_number);
+ static metric_t* get_upward_stat(metric_t* destination, nnet_t** net_list, long long net_count, netlist_t* netlist, uintptr_t traverse_mark_number);
+ 
+-static void init(metric_t* m) {
++void init(metric_t* m) {
+     m->min_depth = 0;
+     m->max_depth = 0;
+     m->avg_depth = 0;
+@@ -69,6 +70,31 @@ void init_stat(netlist_t* netlist) {
+     netlist->num_logic_element = 0;
+ }
+ 
++
++void add_into(metric_t* dest, metric_t* src) {
++    dest->min_depth += src->min_depth;
++    dest->max_depth += src->max_depth;
++    dest->avg_depth += src->avg_depth;
++    dest->avg_width += src->avg_width;
++}
++
++inline double circuit_area(metric_t* v) {
++    return (v->avg_width * v->avg_depth);
++}
++
++double fitness_calc (netlist_t* netlist, metric_t* m) {
++    long long node_count = netlist->total_net_count;
++    double area = circuit_area(m);
++
++    double area_efectness = (m->max_depth) / (area*node_count);
++    // double fan_effectness = (m->max_fanin)+(m->max_fanout);
++    // printf("\n\n \t++node_count: %lld\n\t++area: %f\n\t++max_depth: %f\n\t++max_fan-in: %d\n\t++max_fan-out: %d\n\t++area_effectness: %f\n\t++fan_effectness: %f\n\n", 
++    //       node_count, area, m->max_depth, m->max_fanin, m->max_fanout, area_efectness, fan_effectness);
++
++
++    return 1000000000 * (area_efectness);
++}
++
+ static void print_stats(metric_t* m) {
+     printf("\n\t%s:%0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n",
+            "shortest path", m->min_depth,
+@@ -129,9 +155,10 @@ static bool traverse(nnode_t* node, uintptr_t traverse_mark_number) {
+     return traverse;
+ }
+ 
+-static bool traverse(nnet_t* net, uintptr_t traverse_mark_number) {
++static bool traverse(nnet_t* net, uintptr_t traverse_mark_number, netlist_t* netlist) {
+     bool traverse = (net->traverse_visited != traverse_mark_number);
+     net->traverse_visited = traverse_mark_number;
++    netlist->total_net_count += 1;
+     return traverse;
+ }
+ 
+@@ -210,7 +237,7 @@ static metric_t* get_upward_stat(nnet_t* net, netlist_t* netlist, uintptr_t trav
+     if (net) {
+         destination = &(net->stat.upward);
+ 
+-        if (traverse(net, traverse_mark_number)) {
++        if (traverse(net, traverse_mark_number, netlist)) {
+             init(destination);
+ 
+             if (net->driver_pin) {
+@@ -254,7 +281,7 @@ static metric_t* get_downward_stat(nnet_t* net, netlist_t* netlist, uintptr_t tr
+     if (net) {
+         destination = &(net->stat.downward);
+ 
+-        if (traverse(net, traverse_mark_number)) {
++        if (traverse(net, traverse_mark_number, netlist)) {
+             init(destination);
+             if (net->num_fanout_pins) {
+                 metric_t** child_stat = (metric_t**)vtr::calloc(net->num_fanout_pins, sizeof(metric_t*));
+diff --git a/ODIN_II/SRC/netlist_utils.cpp b/ODIN_II/SRC/netlist_utils.cpp
+index 50784ba4b..e906a0e91 100644
+--- a/ODIN_II/SRC/netlist_utils.cpp
++++ b/ODIN_II/SRC/netlist_utils.cpp
+@@ -35,6 +35,9 @@
+ 
+ extern global_args_t global_args;
+ 
++static npin_t* copy_npin(npin_t* copy_pin);
++npin_t** get_pin_back_pointer(npin_t* pin, direction_e direction);
++
+ /*---------------------------------------------------------------------------------------------
+  * (function: allocate_nnode)
+  *-------------------------------------------------------------------------------------------*/
+@@ -90,45 +93,358 @@ nnode_t* allocate_nnode() {
+     return new_node;
+ }
+ 
+-/*---------------------------------------------------------------------------------------------
+- * (function: free_nnode)
+- *-------------------------------------------------------------------------------------------*/
+-nnode_t* free_nnode(nnode_t* to_free) {
++
++void detach(npin_t* pin, direction_e direction) {
++    npin_t** pin_ref = get_pin_back_pointer(pin, direction);
++    if (pin_ref) {
++        *pin_ref = NULL;
++    }
++}
++
++void detach(nnode_t* to_free, direction_e direction) {
+     if (to_free) {
+-        /* need to free node_data */
++        if (direction == UPWARD) {
++            for (int i = 0; i < to_free->num_input_pins; i += 1) {
++                npin_t* pin = to_free->input_pins[i];
++                if (pin) {
++                    to_free->input_pins[i] = NULL;
++                    if (pin->node == to_free) {
++                        pin->node = NULL;
++                        pin->pin_node_idx = -1;
++                    }
++                }
++            }
++        } else {
++            for (int i = 0; i < to_free->num_output_pins; i += 1) {
++                npin_t* pin = to_free->output_pins[i];
++                if (pin) {
++                    to_free->output_pins[i] = NULL;
++                    if (pin->node == to_free) {
++                        pin->node = NULL;
++                        pin->pin_node_idx = -1;
++                    }
++                }
++            }
++        }
++    }
++}
+ 
+-        for (int i = 0; i < to_free->num_input_pins; i++) {
+-            if (to_free->input_pins[i] && to_free->input_pins[i]->name) {
+-                vtr::free(to_free->input_pins[i]->name);
+-                to_free->input_pins[i]->name = NULL;
++void detach(nnet_t* to_free, direction_e direction) {
++    if (to_free) {
++        if (direction == UPWARD) {
++            npin_t* pin = to_free->driver_pin;
++            if (pin) {
++                to_free->driver_pin = NULL;
++                if (pin->net == to_free) {
++                    pin->net = NULL;
++                    pin->pin_node_idx = -1;
++                }
++            }
++        } else {
++            for (int i = 0; i < to_free->num_fanout_pins; i += 1) {
++                npin_t* pin = to_free->fanout_pins[i];
++                if (pin) {
++                    to_free->fanout_pins[i] = NULL;
++                    if (pin->net == to_free) {
++                        pin->net = NULL;
++                        pin->pin_node_idx = -1;
++                    }
++                }
+             }
+-            to_free->input_pins[i] = (npin_t*)vtr::free(to_free->input_pins[i]);
+         }
++    }
++}
+ 
+-        to_free->input_pins = (npin_t**)vtr::free(to_free->input_pins);
+ 
+-        for (int i = 0; i < to_free->num_output_pins; i++) {
+-            if (to_free->output_pins[i] && to_free->output_pins[i]->name) {
+-                vtr::free(to_free->output_pins[i]->name);
+-                to_free->output_pins[i]->name = NULL;
++/*---------------------------------------------------------------------------------------------
++ * (function: free_nnode_pins)
++ *-------------------------------------------------------------------------------------------*/
++void free_nnode_pins(nnode_t* to_free, direction_e direction) {
++    if (to_free) {
++        if (direction == UPWARD) {
++            for (int i = 0; i < to_free->num_output_pins; i++) {
++                npin_t* pin = to_free->output_pins[i];
++                if (pin) {
++                    to_free->output_pins[i] = NULL;
++                    detach(pin, DOWNWARD);
++                    free_npin(pin);
++                }
++            }
++            vtr::free(to_free->output_pins);
++            to_free->output_pins = NULL;
++        } else {
++            /* need to free node_data */
++            for (int i = 0; i < to_free->num_input_pins; i++) {
++                npin_t* pin = to_free->input_pins[i];
++                if (pin) {
++                    to_free->input_pins[i] = NULL;
++                    detach(pin, UPWARD);
++                    free_npin(pin);
++                }
+             }
+-            to_free->output_pins[i] = (npin_t*)vtr::free(to_free->output_pins[i]);
++            vtr::free(to_free->input_pins);
++            to_free->input_pins = NULL;
+         }
++    }
++}
+ 
+-        to_free->output_pins = (npin_t**)vtr::free(to_free->output_pins);
++/*---------------------------------------------------------------------------------------------
++ * (function: free_nnode_retain_pins)
++ *-------------------------------------------------------------------------------------------*/
++nnode_t* free_nnode_retain_all_content(nnode_t* to_free) {
++    if (to_free) {
++        /* now free the node */
++        vtr::free(to_free);
++        to_free = NULL;
++    }
++    return to_free;
++}
+ 
++/*---------------------------------------------------------------------------------------------
++ * (function: free_nnode_retain_pins)
++ *-------------------------------------------------------------------------------------------*/
++nnode_t* free_nnode_retain_pins(nnode_t* to_free) {
++    if (to_free) {
++        vtr::free(to_free->input_pins);
++        vtr::free(to_free->output_pins);
+         vtr::free(to_free->input_port_sizes);
+         vtr::free(to_free->output_port_sizes);
+         vtr::free(to_free->undriven_pins);
++        vtr::free(to_free->name);
++    }
+ 
+-        if (to_free->name) {
+-            vtr::free(to_free->name);
+-            to_free->name = NULL;
++    return free_nnode_retain_all_content(to_free);
++}
++
++/*---------------------------------------------------------------------------------------------
++ * (function: free_nnode)
++ *-------------------------------------------------------------------------------------------*/
++nnode_t* free_nnode(nnode_t* to_free) {
++    free_nnode_pins(to_free, UPWARD);
++    free_nnode_pins(to_free, DOWNWARD);
++    return free_nnode_retain_pins(to_free);
++}
++
++void reattach(npin_t* pin, direction_e direction) {
++    if (pin) {
++        npin_t** back_ptr = get_pin_back_pointer(pin, direction);
++        if (back_ptr) {
++            *back_ptr = pin;
+         }
++    }
++}
+ 
+-        /* now free the node */
++void reattach(signal_list_t* signals, direction_e direction) {
++    if (signals) {
++        for (int i = 0; i < signals->count; i += 1) {
++            reattach(signals->pins[i], direction);
++        }
++    }
++}
++
++void reattach(nnet_t* net, direction_e direction) {
++    if (net) {
++        if (direction == UPWARD) {
++            reattach(net->driver_pin, direction);
++        } else {
++            for (int i = 0; i < net->num_fanout_pins; i += 1) {
++                reattach(net->fanout_pins[i], direction);
++            }
++        }
++    }
++}
++
++void reattach(nnode_t* node, direction_e direction) {
++    if (node) {
++        if (direction == UPWARD) {
++            for (int i = 0; i < node->num_input_pins; i += 1) {
++                reattach(node->input_pins[i], direction);
++            }
++        } else {
++            for (int i = 0; i < node->num_output_pins; i += 1) {
++                reattach(node->output_pins[i], direction);
++            }
++        }
++    }
++}
++
++/*----------------------------------------------------------- 
++ * This function, recursively, deletes node, pin, net in a tree between an Input and Output lists
++ *----------------------------------------------------------*/
++void recursive_remove_subtree(signal_list_t* input_signals, signal_list_t* output_signals) {
++    for (int i = 0; i < output_signals->count; i += 1) {
++        // we go up until input signal match
++        output_signals->pins[i] = recursive_remove_subtree(input_signals, output_signals->pins[i], INPUT, UPWARD);
++    }
++
++    for (int i = 0; i < input_signals->count; i += 1) {
++        // we go down until output signal match
++        input_signals->pins[i] = recursive_remove_subtree(output_signals, input_signals->pins[i], OUTPUT, DOWNWARD);
+     }
+-    return (nnode_t*)vtr::free(to_free);
++}
++
++npin_t* recursive_remove_subtree(signal_list_t* signals, npin_t* pin, ids signal_type, direction_e direction) {
++    if (pin) {
++        // look for a match in the list
++        // this is not optimal
++        bool delete_pin = true;
++        if (signal_type == pin->type) {
++            for (int i = 0; i < signals->count && delete_pin; i += 1) {
++                delete_pin = (pin != signals->pins[i]);
++            }
++        }
++
++        // net -> node
++        if (pin->type == INPUT) {
++            // unset the parent
++            pin->net = NULL;
++            pin->pin_net_idx = -1;
++
++            if (delete_pin) {
++                pin->node = recursive_remove_subtree(signals, pin->node, signal_type, direction);
++                pin = free_npin(pin);
++            }
++        }
++        // node -> net
++        else // OUTPUT
++        {
++            // unset the parent
++            pin->node = NULL;
++            pin->pin_node_idx = -1;
++
++            if (delete_pin) {
++                pin->net = recursive_remove_subtree(signals, pin->net, signal_type, direction);
++                pin = free_npin(pin);
++            }
++        }
++    }
++    return pin;
++}
++
++nnet_t* recursive_remove_subtree(signal_list_t* signals, nnet_t* net, ids signal_type, direction_e direction) {
++    if (net) {
++        if (direction == UPWARD) {
++            net->driver_pin = recursive_remove_subtree(signals, net->driver_pin, signal_type, direction);
++        } else {
++            for (int i = 0; i < net->num_fanout_pins; i += 1) {
++                net->fanout_pins[i] = recursive_remove_subtree(signals, net->fanout_pins[i], signal_type, direction);
++            }
++        }
++        net = free_nnet(net);
++    }
++    return net;
++}
++
++nnode_t* recursive_remove_subtree(signal_list_t* signals, nnode_t* node, ids signal_type, direction_e direction) {
++    if (node) {
++        if (direction == UPWARD) {
++            for (int i = 0; i < node->num_input_pins; i += 1) {
++                node->input_pins[i] = recursive_remove_subtree(signals, node->input_pins[i], signal_type, direction);
++            }
++        } else // DOWNWARD
++        {
++            for (int i = 0; i < node->num_output_pins; i += 1) {
++                node->output_pins[i] = recursive_remove_subtree(signals, node->output_pins[i], signal_type, direction);
++            }
++        }
++
++        node = free_nnode(node);
++    }
++    return node;
++}
++
++/*-------------------------------------------------------------------------
++ * (function: duplicate_nnode )
++ * 	duplicate a node and all its content, create new pins and force 
++ * 	the pins to point to the new node
++ * 	this is usefull whit high level node to build new substructure 
++ * 	from high level logic block and be able to rip it out itteratively
++ * 	without changing the original I/O
++ *-----------------------------------------------------------------------*/
++nnode_t* duplicate_nnode(nnode_t* node) {
++    if (node == NULL) {
++        return NULL;
++    }
++
++    nnode_t* new_node = (nnode_t*)my_malloc_struct(sizeof(nnode_t));
++
++    new_node->name = node->name;
++    new_node->type = node->type;
++    new_node->bit_width = node->bit_width;
++    new_node->related_ast_node = node->related_ast_node;
++    new_node->traverse_visited = node->traverse_visited;
++
++    new_node->input_pins = node->input_pins;
++    new_node->num_input_pins = node->num_input_pins;
++    new_node->output_pins = node->output_pins;
++    new_node->num_output_pins = node->num_output_pins;
++
++    new_node->input_port_sizes = node->input_port_sizes;
++    new_node->num_input_port_sizes = node->num_input_port_sizes;
++    new_node->output_port_sizes = node->output_port_sizes;
++    new_node->num_output_port_sizes = node->num_output_port_sizes;
++
++    new_node->node_data = node->node_data;
++    new_node->unique_node_data_id = node->unique_node_data_id;
++
++    new_node->forward_level = node->forward_level;
++    new_node->backward_level = node->backward_level;
++    new_node->sequential_level = node->sequential_level;
++    new_node->sequential_terminator = node->sequential_terminator;
++
++    new_node->internal_netlist = node->internal_netlist;
++
++    new_node->associated_function = node->associated_function;
++
++    new_node->simulate_block_cycle = node->simulate_block_cycle;
++
++    new_node->bit_map = node->bit_map;
++    new_node->bit_map_line_count = node->bit_map_line_count;
++
++    new_node->in_queue = node->in_queue;
++
++    new_node->undriven_pins = node->undriven_pins;
++    new_node->num_undriven_pins = node->num_undriven_pins;
++
++    new_node->ratio = node->ratio;
++    new_node->edge_type = node->edge_type;
++
++    new_node->has_initial_value = node->has_initial_value;
++    new_node->initial_value = node->initial_value;
++
++    new_node->generic_output = node->generic_output;
++
++    new_node->input_pins = (npin_t**)vtr::calloc(node->num_input_pins, sizeof(npin_t*));
++    for (int i = 0; i < node->num_input_pins; i += 1) {
++        new_node->input_pins[i] = copy_npin(node->input_pins[i]);
++        new_node->input_pins[i]->net = node->input_pins[i]->net;
++        new_node->input_pins[i]->pin_net_idx = node->input_pins[i]->pin_net_idx;
++        new_node->input_pins[i]->node = new_node;
++        new_node->input_pins[i]->pin_node_idx = i;
++
++        reattach(new_node->input_pins[i], UPWARD);
++    }
++
++    new_node->output_pins = (npin_t**)vtr::calloc(node->num_output_pins, sizeof(npin_t*));
++    for (int i = 0; i < node->num_output_pins; i += 1) {
++        new_node->output_pins[i] = copy_npin(node->output_pins[i]);
++        new_node->output_pins[i]->net = node->output_pins[i]->net;
++        new_node->output_pins[i]->pin_net_idx = node->output_pins[i]->pin_net_idx;
++        new_node->output_pins[i]->node = new_node;
++        new_node->output_pins[i]->pin_node_idx = i;
++
++        reattach(new_node->output_pins[i], DOWNWARD);
++    }
++
++    new_node->name = vtr::strdup(node->name);
++
++    new_node->input_port_sizes = (int*)vtr::malloc(new_node->num_input_port_sizes * sizeof(int));
++    memcpy(new_node->input_port_sizes, node->input_port_sizes, new_node->num_input_port_sizes * sizeof(int));
++
++    new_node->output_port_sizes = (int*)vtr::malloc(new_node->num_output_port_sizes * sizeof(int));
++    memcpy(new_node->output_port_sizes, node->output_port_sizes, new_node->num_output_port_sizes * sizeof(int));
++
++    return new_node;
+ }
+ 
+ /*-------------------------------------------------------------------------
+@@ -178,6 +494,29 @@ void add_output_port_information(nnode_t* node, int port_width) {
+     node->num_output_port_sizes++;
+ }
+ 
++
++npin_t** get_pin_back_pointer(npin_t* pin, direction_e direction) {
++    npin_t** back_reference = NULL;
++    if (pin) {
++        // node -> net
++        if (pin->type == INPUT && direction == UPWARD
++            && pin->net && pin->net->fanout_pins) {
++            back_reference = &pin->net->fanout_pins[pin->pin_net_idx];
++        } else if (pin->type == OUTPUT && direction == DOWNWARD
++                   && pin->net) {
++            back_reference = &pin->net->driver_pin;
++        } else if (pin->type == OUTPUT && direction == UPWARD
++                   && pin->node && pin->node->input_pins) {
++            back_reference = &pin->node->input_pins[pin->pin_node_idx];
++        } else if (pin->type == INPUT && direction == DOWNWARD
++                   && pin->node && pin->node->output_pins) {
++            back_reference = &pin->node->output_pins[pin->pin_node_idx];
++        }
++    }
++    return back_reference;
++}
++
++
+ /*---------------------------------------------------------------------------------------------
+  * (function: add_input_port_information)
+  *-------------------------------------------------------------------------------------------*/
+diff --git a/ODIN_II/SRC/odin_ii.cpp b/ODIN_II/SRC/odin_ii.cpp
+index 0b5d80cd0..a42507b1e 100644
+--- a/ODIN_II/SRC/odin_ii.cpp
++++ b/ODIN_II/SRC/odin_ii.cpp
+@@ -62,6 +62,8 @@
+ #include "vtr_path.h"
+ #include "vtr_memory.h"
+ 
++#include "registered_ga_items.h"
++
+ #define DEFAULT_OUTPUT "."
+ 
+ int current_parse_file = -1;
+@@ -164,6 +166,7 @@ static ODIN_ERROR_CODE synthesize_verilog() {
+         /* point where we convert netlist to FPGA or other hardware target compatible format */
+         printf("Performing Partial Map to target device\n");
+         partial_map_top(verilog_netlist);
++        GA_partial_map_top(verilog_netlist);
+ 
+         /* Find any unused logic in the netlist and remove it */
+         remove_unused_logic(verilog_netlist);
+@@ -425,6 +428,29 @@ void get_options(int argc, char** argv) {
+         .default_value("false")
+         .action(argparse::Action::STORE_TRUE);
+ 
++    ////mehrshad
++    other_grp.add_argument(global_args.ga_partial_map, "--GA")
++        .help("Activate Genetic Algorithm during partial mapping")
++        .default_value("2.0")
++        .metavar("FOOTPRINT_RATIO");
++
++        other_grp.add_argument(global_args.ga_partial_map_mr, "--GA-MR")
++        .help("SET MUTATION RATE PERCENTAGE")
++        .default_value("50")
++        .metavar("MUTATION_RATE");
++
++        other_grp.add_argument(global_args.ga_partial_map_gs, "--GA-GS")
++        .help("SET GENERATION SIZE")
++        .default_value("6")
++        .metavar("GENERATION_SIZE");
++
++        other_grp.add_argument(global_args.ga_partial_map_gc, "--GA-GC")
++        .help("SET GENERATION COUNT")
++        .default_value("32")
++        .metavar("GENERATION_COUNT");
++
++    ////mehrshad
++
+     other_grp.add_argument(global_args.write_ast_as_dot, "-A")
+         .help("Output AST graph in graphviz .dot format")
+         .default_value("false")
+@@ -619,6 +645,12 @@ void set_default_config() {
+     configuration.output_type = std::string("blif");
+     configuration.output_ast_graphs = 0;
+     configuration.output_netlist_graphs = 0;
++    configuration.mutation_rate = 0.5;
++    configuration.generation_size = 6;
++    configuration.generation_count = 32;
++    // by default we target twice as wide then deep
++    //
++    configuration.ga_partial_map = 2.0;
+     configuration.print_parse_tokens = 0;
+     configuration.output_preproc_source = 0; // TODO: unused
+     configuration.debug_output_path = std::string(DEFAULT_OUTPUT);
+diff --git a/ODIN_II/SRC/odin_util.cpp b/ODIN_II/SRC/odin_util.cpp
+index b513b549c..9079cd4dd 100644
+--- a/ODIN_II/SRC/odin_util.cpp
++++ b/ODIN_II/SRC/odin_util.cpp
+@@ -39,6 +39,7 @@
+ #include "vtr_memory.h"
+ #include <regex>
+ #include <stdbool.h>
++#include "enum_str.cpp"
+ 
+ // for mkdir
+ #ifdef WIN32
+@@ -119,6 +120,12 @@ const char* name_based_on_op(operation_list op) {
+     return operation_list_STR[op][ODIN_STRING_TYPE];
+ }
+ 
++const char* name_based_on_type(adder_type_e type) {
++    oassert(type < adder_type_END && "OUT OF BOUND adder_type_e!");
++
++    return adder_type_STR[type];
++}
++
+ /*---------------------------------------------------------------------------------------------
+  * (function: name_based_on_ids)
+  * 	Get the string version of an operation
+diff --git a/ODIN_II/SRC/partial_map.cpp b/ODIN_II/SRC/partial_map.cpp
+index 8b7eb397b..fc7f27706 100644
+--- a/ODIN_II/SRC/partial_map.cpp
++++ b/ODIN_II/SRC/partial_map.cpp
+@@ -57,8 +57,8 @@ void instantiate_GE(nnode_t* node, operation_list type, short mark, netlist_t* n
+ void instantiate_GT(nnode_t* node, operation_list type, short mark, netlist_t* netlist);
+ void instantiate_shift_left_or_right(nnode_t* node, operation_list type, short mark, netlist_t* netlist);
+ void instantiate_arithmetic_shift_right(nnode_t* node, short mark, netlist_t* netlist);
+-void instantiate_unary_sub(nnode_t* node, short mark, netlist_t* netlist);
+-void instantiate_sub_w_carry(nnode_t* node, short mark, netlist_t* netlist);
++void instantiate_unary_sub(adder_type_e type, nnode_t* node, short mark, netlist_t* netlist);
++void instantiate_sub_w_carry(adder_type_e type, nnode_t* node, short mark, netlist_t* netlist);
+ 
+ void instantiate_soft_logic_ram(nnode_t* node, short mark, netlist_t* netlist);
+ 
+@@ -170,7 +170,7 @@ void partial_map_node(nnode_t* node, short traverse_number, netlist_t* netlist)
+                 // Check if the size of this adder is greater than the hard vs soft logic threshold
+                 instantiate_hard_adder(node, traverse_number, netlist);
+             } else {
+-                instantiate_add_w_carry(node, traverse_number, netlist);
++                instantiate_add_w_carry(RCA, node, traverse_number, netlist);
+             }
+             break;
+         case MINUS:
+@@ -180,18 +180,18 @@ void partial_map_node(nnode_t* node, short traverse_number, netlist_t* netlist)
+                     if (max_num >= min_add)
+                         instantiate_hard_adder_subtraction(node, traverse_number, netlist);
+                     else
+-                        instantiate_add_w_carry(node, traverse_number, netlist);
++                        instantiate_add_w_carry(RCA, node, traverse_number, netlist);
+                 } else if (node->num_input_port_sizes == 2) {
+-                    instantiate_sub_w_carry(node, traverse_number, netlist);
++                    instantiate_sub_w_carry(RCA, node, traverse_number, netlist);
+                 } else if (node->num_input_port_sizes == 1) {
+-                    instantiate_unary_sub(node, traverse_number, netlist);
++                    instantiate_unary_sub(RCA, node, traverse_number, netlist);
+                 } else
+                     oassert(false);
+             } else {
+                 if (node->num_input_port_sizes == 2) {
+-                    instantiate_sub_w_carry(node, traverse_number, netlist);
++                    instantiate_sub_w_carry(RCA, node, traverse_number, netlist);
+                 } else if (node->num_input_port_sizes == 1) {
+-                    instantiate_unary_sub(node, traverse_number, netlist);
++                    instantiate_unary_sub(RCA, node, traverse_number, netlist);
+                 } else
+                     oassert(false);
+             }
+@@ -551,7 +551,7 @@ void instantiate_bitwise_logic(nnode_t* node, operation_list op, short mark, net
+  *	multi-output logic functions (BLIF).  We use one function for the
+  *	add, and one for the carry.
+  *------------------------------------------------------------------------*/
+-void instantiate_add_w_carry(nnode_t* node, short mark, netlist_t* netlist) {
++void instantiate_add_w_carry(adder_type_e type, nnode_t* node, short mark, netlist_t* netlist) {
+     // define locations in array when fetching pins
+     const int out = 0, input_a = 1, input_b = 2, pinout_count = 3;
+ 
+@@ -567,7 +567,7 @@ void instantiate_add_w_carry(nnode_t* node, short mark, netlist_t* netlist) {
+     width[input_a] = node->input_port_sizes[0];
+     width[input_b] = node->input_port_sizes[1];
+ 
+-    instantiate_add_w_carry_block(width, node, mark, netlist, 0);
++    instantiate_add_w_carry_block(type, width, node, mark, netlist, 0);
+ 
+     vtr::free(width);
+ }
+@@ -577,7 +577,7 @@ void instantiate_add_w_carry(nnode_t* node, short mark, netlist_t* netlist) {
+  * 	This subtraction is intended for sof subtraction with output formats that can't handle
+  * 	multi output logic functions.  We split the add and the carry over two logic functions.
+  *-------------------------------------------------------------------------------------------*/
+-void instantiate_sub_w_carry(nnode_t* node, short mark, netlist_t* netlist) {
++void instantiate_sub_w_carry(adder_type_e type, nnode_t* node, short mark, netlist_t* netlist) {
+     // define locations in array when fetching pins
+     const int out = 0, input_a = 1, input_b = 2, pinout_count = 3;
+ 
+@@ -594,7 +594,7 @@ void instantiate_sub_w_carry(nnode_t* node, short mark, netlist_t* netlist) {
+         width[input_b] = node->input_port_sizes[1];
+     }
+ 
+-    instantiate_add_w_carry_block(width, node, mark, netlist, 1);
++    instantiate_add_w_carry_block(type, width, node, mark, netlist, 1);
+ 
+     vtr::free(width);
+ }
+@@ -603,8 +603,8 @@ void instantiate_sub_w_carry(nnode_t* node, short mark, netlist_t* netlist) {
+  * (function:  instantiate_unary_sub )
+  *	Does 2's complement which is the equivalent of a unary subtraction as a HW implementation.
+  *-------------------------------------------------------------------------------------------*/
+-void instantiate_unary_sub(nnode_t* node, short mark, netlist_t* netlist) {
+-    instantiate_sub_w_carry(node, mark, netlist);
++void instantiate_unary_sub(adder_type_e type, nnode_t* node, short mark, netlist_t* netlist) {
++    instantiate_sub_w_carry(type, node, mark, netlist);
+ }
+ 
+ /*---------------------------------------------------------------------------------------------
+diff --git a/ODIN_II/SRC/registered_ga_items.cpp b/ODIN_II/SRC/registered_ga_items.cpp
+new file mode 100644
+index 000000000..7070906ab
+--- /dev/null
++++ b/ODIN_II/SRC/registered_ga_items.cpp
+@@ -0,0 +1,103 @@
++#include "registered_ga_items.h"
++#include "ga_partial_map.h"
++#include "partial_map.h"
++#include "odin_error.h"
++#include "odin_util.h"
++#include "netlist_statistic.h"
++#include "vtr_memory.h"
++
++// global with a ga for each op
++ga_t* ga_op[operation_list_END] = {0};
++bool ga_list_is_registered = false;
++int traversal_id = PARTIAL_MAP_TRAVERSE_VALUE_GA_ADDERS;
++
++// fn definition for wrappers
++void instantiate_add_w_carry(ga_type_e type, nnode_t* node, short mark, netlist_t* netlist);
++
++// general fn definition
++void new_ga(operation_list op, instantiate_logic_fn_t inst_fn, int type_length, int type_init);
++void GA_partial_map_top_item(operation_list op, netlist_t* netlist);
++
++/************************************************
++ * 
++ * Register new types here
++ * 
++ */
++void register_ga() {
++    new_ga(ADD, instantiate_add_w_carry, adder_type_END, RCA);
++
++    // signify that we are
++    ga_list_is_registered = true;
++}
++
++void GA_partial_map_top(netlist_t* netlist) {
++    /**
++     * 
++     * ordering of optimization is crutial 
++     * 
++     * */
++
++    GA_partial_map_top_item(ADD, netlist);
++}
++
++/************************************************
++ * wrappers to cast back to type 
++ * 
++ * When you want to add new function, casting type to int throw warnings,
++ * the wrapper help prevent this issue 
++ */
++void instantiate_add_w_carry(ga_type_e type, nnode_t* node, short mark, netlist_t* netlist) {
++    instantiate_add_w_carry((adder_type_e)type, node, mark, netlist);
++}
++
++/************************************************
++ * 
++ * 
++ * 
++ * 
++ *  wrapper to hide the ga calls 
++ * 
++ * 
++ * 
++ * */
++
++void new_ga(operation_list op, instantiate_logic_fn_t inst_fn, int type_length, int type_init) {
++    oassert(NULL == ga_op[op]);
++    oassert(NULL != inst_fn);
++    oassert(type_init < type_length);
++
++    ga_op[op] = new_ga_t(inst_fn, type_length, type_init, op);
++}
++
++void add_to_ga(nnode_t* node) {
++    if (node) {
++        if (!ga_list_is_registered) {
++            register_ga();
++        }
++
++        if (NULL == ga_op[node->type]) {
++            error_message(NETLIST, -1, -1,
++                          "%s does not have a registered GA type. unable to proceed",
++                          node_name_based_on_op(node));
++        }
++
++        add_to_ga_t(ga_op[node->type], node);
++    }
++}
++
++void GA_partial_map_top_item(operation_list op, netlist_t* netlist) {
++    if (ga_op[op]) {
++        ga_type_e* mapping = get_best_mapping_for(ga_op[op], netlist, traversal_id);
++
++        for (int i = 0; i < ga_op[op]->size; i += 1) {
++            reattach_connection(ga_op[op]->connectivity[mapping[i]][i]);
++            //free_connection(ga_op[op]->connectivity[mapping[i]][i]);
++            //ga_op[op]->connectivity[mapping[i]][i] = NULL;
++        }
++
++        //vtr::free(mapping);
++        //free_ga_t(ga_op[op]);
++        //ga_op[op] = NULL;
++        traversal_id += 1;
++    }
++}
+diff --git a/ODIN_II/chart-criticalPath.sh b/ODIN_II/chart-criticalPath.sh
+new file mode 100755
+index 000000000..27419107b
+--- /dev/null
++++ b/ODIN_II/chart-criticalPath.sh
+@@ -0,0 +1,91 @@
++#!/bin/bash
++# Run GA script
++
++
++################################################################################################
++##########################################--GLOBALS--###########################################
++################################################################################################
++footprint=2
++DEFAULT_MR=50
++DEFAULT_GS=6
++DEFAULT_GC=1000
++
++MIN_MR=10
++# MIN_GS=5
++# MIN_GC=1000
++
++MAX_MR=100
++# MAX_GS=15
++# MAX_GC=20000
++
++RATE_MR=10
++# RATE_GS=1
++# RATE_GC=1000
++
++
++GS_ARRAY=(1 2 4 8 16)
++GS_ARRAY_SIZE=5
++GC_ARRAY=(256 512 1024 2048 4096 8192 16384 32768)
++GC_ARRAY_SIZE=8
++
++WIDE_PATH="==========================================="
++
++################################################
++
++TESTS_PATH="./regression_test/benchmark/verilog/ga"
++GA_OUTPUTS_DIR="./ga_outputs"
++NEW_DIR=""
++RUN_PATH=""
++################################################################################################
++########################################--FUNCTIONS--###########################################
++################################################################################################
++# Init Directories and cleanup
++
++# Init Directories and cleanup
++ function check_dir_csv () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $(($counter-1)))
++ }
++
++################################################################################################
++#########################################--CHART CSV--##########################################
++################################################################################################
++start=$(date +%s%N)/1000000
++printf "\n-------------------- Generating general chart.csv files --------------------\n\n"
++gcc ./findMinCP.c -o findMinCP -std=c99
++
++check_dir_csv
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++        RUN_PATH=${NEW_DIR}/$filename
++        mkdir -p ${RUN_PATH}/charts
++        CHART_PATH=${RUN_PATH}/charts
++
++        ./findMinCP -T ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/db.csv &
++
++        ./findMinCP -C ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_gc.csv &
++
++        ./findMinCP -S ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_gs.csv &
++
++        ./findMinCP -M ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_mr.csv &
++
++        ./findMinCP -G ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart.csv 
++
++        wait
++done
++end=$(date +%s%N)/1000000
++
++printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++echo "[INFO] $filename -- General Chart CSV Generation"
+diff --git a/ODIN_II/chart-fitness.sh b/ODIN_II/chart-fitness.sh
+new file mode 100755
+index 000000000..524c81630
+--- /dev/null
++++ b/ODIN_II/chart-fitness.sh
+@@ -0,0 +1,91 @@
++#!/bin/bash
++# Run GA script
++
++
++################################################################################################
++##########################################--GLOBALS--###########################################
++################################################################################################
++footprint=2
++DEFAULT_MR=50
++DEFAULT_GS=6
++DEFAULT_GC=1000
++
++MIN_MR=10
++# MIN_GS=5
++# MIN_GC=1000
++
++MAX_MR=100
++# MAX_GS=15
++# MAX_GC=20000
++
++RATE_MR=10
++# RATE_GS=1
++# RATE_GC=1000
++
++
++GS_ARRAY=(1 2 4 8 16)
++GS_ARRAY_SIZE=5
++GC_ARRAY=(256 512 1024 2048 4096 8192 16384 32768)
++GC_ARRAY_SIZE=8
++
++WIDE_PATH="==========================================="
++
++################################################
++
++TESTS_PATH="./regression_test/benchmark/verilog/ga"
++GA_OUTPUTS_DIR="./ga_outputs"
++NEW_DIR=""
++RUN_PATH=""
++################################################################################################
++########################################--FUNCTIONS--###########################################
++################################################################################################
++# Init Directories and cleanup
++
++# Init Directories and cleanup
++ function check_dir_csv () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $(($counter-1)))
++ }
++
++################################################################################################
++#########################################--CHART CSV--##########################################
++################################################################################################
++start=$(date +%s%N)/1000000
++printf "\n-------------------- Generating general chart.csv files --------------------\n\n"
++gcc ./findMinFitness.c -o findMinFitness -std=c99
++
++check_dir_csv
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++        RUN_PATH=${NEW_DIR}/$filename
++        mkdir -p ${RUN_PATH}/charts
++        CHART_PATH=${RUN_PATH}/charts
++
++        ./findMinFitness -T ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/db.csv &
++
++        ./findMinFitness -C ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_gc.csv &
++
++        ./findMinFitness -S ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_gs.csv &
++
++        ./findMinFitness -M ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_mr.csv &
++
++        ./findMinFitness -G ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart.csv 
++
++        wait
++done
++end=$(date +%s%N)/1000000
++
++printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++echo "[INFO] $filename -- General Chart CSV Generation"
+diff --git a/ODIN_II/chart-nodeCount.sh b/ODIN_II/chart-nodeCount.sh
+new file mode 100755
+index 000000000..43052a973
+--- /dev/null
++++ b/ODIN_II/chart-nodeCount.sh
+@@ -0,0 +1,91 @@
++#!/bin/bash
++# Run GA script
++
++
++################################################################################################
++##########################################--GLOBALS--###########################################
++################################################################################################
++footprint=2
++DEFAULT_MR=50
++DEFAULT_GS=6
++DEFAULT_GC=1000
++
++MIN_MR=10
++# MIN_GS=5
++# MIN_GC=1000
++
++MAX_MR=100
++# MAX_GS=15
++# MAX_GC=20000
++
++RATE_MR=10
++# RATE_GS=1
++# RATE_GC=1000
++
++
++GS_ARRAY=(1 2 4 8 16)
++GS_ARRAY_SIZE=5
++GC_ARRAY=(256 512 1024 2048 4096 8192 16384 32768)
++GC_ARRAY_SIZE=8
++
++WIDE_PATH="==========================================="
++
++################################################
++
++TESTS_PATH="./regression_test/benchmark/verilog/ga"
++GA_OUTPUTS_DIR="./ga_outputs"
++NEW_DIR=""
++RUN_PATH=""
++################################################################################################
++########################################--FUNCTIONS--###########################################
++################################################################################################
++# Init Directories and cleanup
++
++# Init Directories and cleanup
++ function check_dir_csv () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $(($counter-1)))
++ }
++
++################################################################################################
++#########################################--CHART CSV--##########################################
++################################################################################################
++start=$(date +%s%N)/1000000
++printf "\n-------------------- Generating general chart.csv files --------------------\n\n"
++gcc ./findMinSize.c -o findMinSize -std=c99
++
++check_dir_csv
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++        RUN_PATH=${NEW_DIR}/$filename
++        mkdir -p ${RUN_PATH}/charts
++        CHART_PATH=${RUN_PATH}/charts
++
++        ./findMinSize -T ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/db.csv &
++
++        ./findMinSize -C ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_gc.csv &
++
++        ./findMinSize -S ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_gs.csv &
++
++        ./findMinSize -M ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_mr.csv &
++
++        ./findMinSize -G ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart.csv 
++
++        wait
++done
++end=$(date +%s%N)/1000000
++
++printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++echo "[INFO] $filename -- General Chart CSV Generation"
+diff --git a/ODIN_II/findMinCP.c b/ODIN_II/findMinCP.c
+new file mode 100644
+index 000000000..011f628d1
+--- /dev/null
++++ b/ODIN_II/findMinCP.c
+@@ -0,0 +1,401 @@
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <limits.h>
++#include <string.h>
++
++#define MIN_MR 10
++// #define MIN_GS 5
++// #define MIN_GC 1000
++ 
++#define MAX_MR 100
++// #define MAX_GS 15
++// #define MAX_GC 20000
++ 
++#define RATE_MR 10
++// #define RATE_GS 1
++// #define RATE_GC 1000
++
++#define MR_ITER (((MAX_MR - MIN_MR) + RATE_MR) / RATE_MR)
++// #define GS_ITER (((MAX_GS - MIN_GS) + RATE_GS) / RATE_GS)
++#define GS_ITER 5
++// #define GC_ITER (((MAX_GC - MIN_GC) + RATE_GC) / RATE_GC)
++#define GC_ITER 8
++
++int GS_ARRAY[GS_ITER]={1,2,4,8,16};
++int GC_ARRAY[GC_ITER]={256,512,1024,2048,4096,8192,16384,32768};
++
++FILE *fp = NULL;
++char *filename;
++
++struct stats {
++    float mutation_rate;
++    int generation_size;
++    int generation_count;
++    int generation_number;
++    float fitness;
++    int max_fanin;
++    int max_fanout;
++    int critical_path;
++    char* op;
++    int op_number;
++    int node_count;
++    int RCA_number;
++    int CSLA_number;
++    int BE_CSLA_number;
++} Stat;
++
++void init(struct stats* curr_stat){
++
++    curr_stat->mutation_rate = -1;
++    curr_stat->generation_size = -1;
++    curr_stat->generation_count = -1;
++    curr_stat->generation_number = -1;
++    curr_stat->fitness = INT_MAX;
++    curr_stat->max_fanin = -1;
++    curr_stat->max_fanout = -1;
++    curr_stat->critical_path = INT_MAX;
++    curr_stat->op = (char*)malloc (32*sizeof(char));
++    curr_stat->op_number = -1;
++    curr_stat->node_count = -1;
++    curr_stat->RCA_number = -1;
++    curr_stat->CSLA_number = -1;
++    curr_stat->BE_CSLA_number = -1;
++}
++
++void copy_stat(struct stats* copy_stat, struct stats* paste_stat) {
++
++    paste_stat->mutation_rate     = copy_stat->mutation_rate;
++    paste_stat->generation_size   = copy_stat->generation_size;
++    paste_stat->generation_count  = copy_stat->generation_count;
++    paste_stat->generation_number = copy_stat->generation_number;
++    paste_stat->fitness           = copy_stat->fitness;
++    paste_stat->max_fanin         = copy_stat->max_fanin;
++    paste_stat->max_fanout        = copy_stat->max_fanout;
++    paste_stat->critical_path     = copy_stat->critical_path;
++    paste_stat->op                = copy_stat->op;
++    paste_stat->op_number         = copy_stat->op_number;
++    paste_stat->node_count        = copy_stat->node_count;
++    paste_stat->RCA_number        = copy_stat->RCA_number;
++    paste_stat->CSLA_number       = copy_stat->CSLA_number;
++    paste_stat->BE_CSLA_number    = copy_stat->BE_CSLA_number;
++}
++
++void miss_lines (int num) {
++
++    char line[1024];
++
++    for (int i = 0; i < num; i++) 
++        fgets(line, sizeof(line), fp);
++}
++
++void scan_stat (struct stats* curr_stat) {
++
++    fscanf(fp, "%d,%f,%d,%d,%d,ADD,%d,%d,%d,%d,%d", 
++                &curr_stat->generation_number, &curr_stat->fitness, &curr_stat->critical_path, 
++                &curr_stat->max_fanin, &curr_stat->max_fanout, /*curr_stat->op,*/ &curr_stat->op_number, 
++                &curr_stat->node_count, &curr_stat->RCA_number, &curr_stat->CSLA_number, &curr_stat->BE_CSLA_number);
++}
++
++void print_header () {
++    printf("%s\n", "benchmark,mutation_rate,generation_size,generation_count,generation_number,fitness,critical_path,max_fanin,max_fanout,ADD,op_number,node_count,RCA_number,CSLA_number,BE_CSLA_number");
++}
++
++void print_stat (struct stats* temp) {
++
++    printf("%s,%.3f,%d,%d,", filename,temp->mutation_rate, temp->generation_size, temp->generation_count);
++    printf("%d,%f,%d,%d,%d,%s,%d,%d,%d,%d,%d\n", 
++            temp->generation_number, temp->fitness, temp->critical_path, temp->max_fanin,
++            temp->max_fanout, "ADD"/*first_min_stat->op*/, temp->op_number, temp->node_count,
++            temp->RCA_number, temp->CSLA_number, temp->BE_CSLA_number);
++}
++
++void extract_top_in_generation_counts () {
++    
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    init(curr_stat);
++
++    printf("\n[INFO]\tMin Critical Paths Among Different Generation Counts:\n\n");
++    print_header();
++
++    while( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++        
++        init(min_stat_gc);
++        for (int i = 0; i < curr_stat->generation_count; i++) {
++        
++            scan_stat (curr_stat);
++
++            if ( curr_stat->critical_path < min_stat_gc->critical_path )
++                copy_stat(curr_stat, min_stat_gc);
++
++        }
++        miss_lines(1);
++
++        print_stat (min_stat_gc);
++
++        // if (min_stat_gc->generation_count == GC_ARRAY[GC_ITER-1])   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gc);
++}
++
++void extract_top_in_generation_sizes () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++
++    init(curr_stat);
++
++    printf("\n[INFO]\tMin Critical Paths Among Different Generation Sizes:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat_gs);
++        for (int j = 0; j < GC_ITER; j++) {
++
++            init(min_stat_gc);
++            for (int i = 0; i < curr_stat->generation_count; i++) {
++            
++                scan_stat (curr_stat);
++
++                if ( curr_stat->critical_path < min_stat_gc->critical_path )
++                    copy_stat(curr_stat, min_stat_gc);
++            }
++            miss_lines(1);
++
++            if ( min_stat_gc->critical_path < min_stat_gs->critical_path )
++                copy_stat(min_stat_gc, min_stat_gs);
++
++            if (j < GC_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++        }
++
++        print_stat (min_stat_gs);
++
++        // if (min_stat_gs->generation_size == GS_ARRAY[GS_ITER-1])   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++}
++
++void extract_top_in_mutation_rates () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_mr = (struct stats*)malloc (sizeof(struct stats));
++
++    init(curr_stat);
++
++    printf("\n[INFO]\tMin Critical Paths Among Different Mutation Rates:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat_mr);
++        for (int k = 0; k < GS_ITER; k++) {
++            
++            init(min_stat_gs);
++            for (int j = 0; j < GC_ITER; j++) {
++
++                init(min_stat_gc);
++                for (int i = 0; i < curr_stat->generation_count; i++) {
++
++                    scan_stat (curr_stat);
++
++                    if ( curr_stat->critical_path < min_stat_gc->critical_path )
++                        copy_stat(curr_stat, min_stat_gc);
++                }
++
++                miss_lines(1);
++
++                if ( min_stat_gc->critical_path < min_stat_gs->critical_path )
++                    copy_stat(min_stat_gc, min_stat_gs);
++
++                if (j < GC_ITER-1)
++                    fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++            }
++
++            if ( min_stat_gs->critical_path < min_stat_mr->critical_path )
++                copy_stat(min_stat_gs, min_stat_mr);
++
++            if (k < GS_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++        }
++
++        print_stat (min_stat_mr);
++
++        // if (min_stat_mr->mutation_rate == MAX_MR/100)   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++    free(min_stat_mr);
++}
++
++void extract_top_in_general () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_mr = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat = (struct stats*)malloc (sizeof(struct stats));
++    
++    init(curr_stat);
++
++    printf("\n[INFO]\tGeneral MIN Critical Path:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat);
++        for (int z = 0; z < MR_ITER; z++) {
++
++            init(min_stat_mr);
++            for (int k = 0; k < GS_ITER; k++) {
++                
++                init(min_stat_gs);
++                for (int j = 0; j < GC_ITER; j++) {
++
++                    init(min_stat_gc);
++                    for (int i = 0; i < curr_stat->generation_count; i++) {
++
++                        scan_stat (curr_stat);
++
++                        if ( curr_stat->critical_path < min_stat_gc->critical_path )
++                            copy_stat(curr_stat, min_stat_gc);
++                    }
++
++                    miss_lines(1);
++
++                    if ( min_stat_gc->critical_path < min_stat_gs->critical_path )
++                        copy_stat(min_stat_gc, min_stat_gs);
++
++                    if (j < GC_ITER-1)
++                        fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++                }
++
++                if ( min_stat_gs->critical_path < min_stat_mr->critical_path )
++                    copy_stat(min_stat_gs, min_stat_mr);
++
++                if (k < GS_ITER-1)
++                    fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++            }
++
++            if ( min_stat_mr->critical_path < min_stat->critical_path )
++                    copy_stat(min_stat_mr, min_stat);
++
++            if (z < MR_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++                
++        }
++
++        print_stat (min_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++    free(min_stat_mr);
++}
++
++void create_db () {
++    
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    init(curr_stat);
++
++    print_header();
++
++    while( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++        
++        for (int i = 0; i < curr_stat->generation_count; i++){
++                scan_stat(curr_stat);
++                print_stat (curr_stat);
++        }
++
++        miss_lines(1);
++    }
++
++    free(curr_stat);
++}
++
++int main (int argc, char* argv[]) {
++
++    if ( argc < 4 ) {
++        
++        printf("%s%s%s%s%s%s\n", "[ERROR] Few arguments! \n\n",
++                                    "Usage:\n",
++                                    "\t[-S]\tFind the min critical path through generation counts\n",
++                                    "\t[-C]\tFind the min critical path through generation sizes.\n",
++                                    "\t[-M]\tFind the min critical path through mutation rates\n",
++                                    "\t[-G]\tFind the min critical path through entire configurations\n\n");
++        return 1;
++    }
++
++    filename = (char*) malloc (20*sizeof(char));
++    filename = argv[3];
++
++    fp = fopen(argv[2], "r");
++
++    if ( fp == NULL ) {
++        printf("file open error!\n");
++        return 1;
++    }
++    
++    switch (argv[1][1]) {
++        
++        case 'C':
++        {
++            extract_top_in_generation_counts ();
++            break;
++        }
++
++        case 'S':
++        {
++            extract_top_in_generation_sizes ();
++            break;
++        }
++
++        case 'M':
++        {
++            extract_top_in_mutation_rates ();
++            break;
++        }
++
++        case 'G':
++        {
++            extract_top_in_general ();
++            break;
++        }
++
++        case 'T':
++        {
++            create_db ();
++            break;
++        }
++
++        default:
++        {
++            printf("%s%s%s%s%s%s\n", "[ERROR] Wrong arguments! \n\n",
++                                    "Usage:\n",
++                                    "\t[-S]\tFind the min critical path through generation counts\n",
++                                    "\t[-C]\tFind the min critical path through generation sizes.\n",
++                                    "\t[-M]\tFind the min critical path through mutation rates\n",
++                                    "\t[-G]\tFind the min critical path through entire configurations\n\n");
++            return 1;
++        }
++    }
++    
++    fclose(fp);
++    return 0;
++}
+diff --git a/ODIN_II/findMinFitness.c b/ODIN_II/findMinFitness.c
+new file mode 100644
+index 000000000..55f736f85
+--- /dev/null
++++ b/ODIN_II/findMinFitness.c
+@@ -0,0 +1,402 @@
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <limits.h>
++#include <string.h>
++
++#define MIN_MR 60
++// #define MIN_GS 5
++// #define MIN_GC 1000
++ 
++#define MAX_MR 60
++// #define MAX_GS 15
++// #define MAX_GC 20000
++ 
++#define RATE_MR 5
++// #define RATE_GS 1
++// #define RATE_GC 1000
++
++#define MR_ITER (((MAX_MR - MIN_MR) + RATE_MR) / RATE_MR)
++// #define GS_ITER (((MAX_GS - MIN_GS) + RATE_GS) / RATE_GS)
++#define GS_ITER 1
++// #define GC_ITER (((MAX_GC - MIN_GC) + RATE_GC) / RATE_GC)
++#define GC_ITER 1
++
++int GS_ARRAY[GS_ITER]={8};//,4,8,16,32,64};
++int GC_ARRAY[GC_ITER]={1024};//,512,1024,2048,4096,8192,16384,32768};
++
++FILE *fp = NULL;
++char *filename;
++
++struct stats {
++    float mutation_rate;
++    int generation_size;
++    int generation_count;
++    int generation_number;
++    float fitness;
++    int max_fanin;
++    int max_fanout;
++    int critical_path;
++    char* op;
++    int op_number;
++    int node_count;
++    int RCA_number;
++    int CSLA_number;
++    int BE_CSLA_number;
++} Stat;
++
++void init(struct stats* curr_stat){
++
++    curr_stat->mutation_rate = -1;
++    curr_stat->generation_size = -1;
++    curr_stat->generation_count = -1;
++    curr_stat->generation_number = -1;
++    curr_stat->fitness = INT_MAX;
++    curr_stat->max_fanin = -1;
++    curr_stat->max_fanout = -1;
++    curr_stat->critical_path = -1;
++    curr_stat->op = (char*)malloc (32*sizeof(char));
++    curr_stat->op_number = -1;
++    curr_stat->node_count = -1;
++    curr_stat->RCA_number = -1;
++    curr_stat->CSLA_number = -1;
++    curr_stat->BE_CSLA_number = -1;
++}
++
++void copy_stat(struct stats* copy_stat, struct stats* paste_stat) {
++
++    paste_stat->mutation_rate     = copy_stat->mutation_rate;
++    paste_stat->generation_size   = copy_stat->generation_size;
++    paste_stat->generation_count  = copy_stat->generation_count;
++    paste_stat->generation_number = copy_stat->generation_number;
++    paste_stat->fitness           = copy_stat->fitness;
++    paste_stat->max_fanin         = copy_stat->max_fanin;
++    paste_stat->max_fanout        = copy_stat->max_fanout;
++    paste_stat->critical_path     = copy_stat->critical_path;
++    paste_stat->op                = copy_stat->op;
++    paste_stat->op_number         = copy_stat->op_number;
++    paste_stat->node_count        = copy_stat->node_count;
++    paste_stat->RCA_number        = copy_stat->RCA_number;
++    paste_stat->CSLA_number       = copy_stat->CSLA_number;
++    paste_stat->BE_CSLA_number    = copy_stat->BE_CSLA_number;
++}
++
++void miss_lines (int num) {
++
++    char line[1024];
++
++    for (int i = 0; i < num; i++) 
++        fgets(line, sizeof(line), fp);
++}
++
++void scan_stat (struct stats* curr_stat) {
++
++    fscanf(fp, "%d,%f,%d,%d,%d,ADD,%d,%d,%d,%d,%d", 
++                &curr_stat->generation_number, &curr_stat->fitness, &curr_stat->critical_path, 
++                &curr_stat->max_fanin, &curr_stat->max_fanout, /*curr_stat->op,*/ &curr_stat->op_number, 
++                &curr_stat->node_count, &curr_stat->RCA_number, &curr_stat->CSLA_number, &curr_stat->BE_CSLA_number);
++}
++
++void print_header () {
++    printf("%s\n", "benchmark,mutation_rate,generation_size,generation_count,generation_number,fitness,critical_path,max_fanin,max_fanout,ADD,op_number,node_count,RCA_number,CSLA_number,BE_CSLA_number");
++}
++
++void print_stat (struct stats* temp) {
++
++    printf("%s,%.3f,%d,%d,", filename,temp->mutation_rate, temp->generation_size, temp->generation_count);
++    printf("%d,%f,%d,%d,%d,%s,%d,%d,%d,%d,%d\n", 
++            temp->generation_number, temp->fitness, temp->critical_path, temp->max_fanin,
++            temp->max_fanout, "ADD"/*first_min_stat->op*/, temp->op_number, temp->node_count,
++            temp->RCA_number, temp->CSLA_number, temp->BE_CSLA_number);
++}
++
++void extract_top_in_generation_counts () {
++    
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    init(curr_stat);
++
++    printf("\n[INFO]\tBest Fitnesses Among Different Generation Counts:\n\n");
++    print_header();
++
++    while( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++        
++        init(min_stat_gc);
++        for (int i = 0; i < curr_stat->generation_count; i++) {
++        
++            scan_stat (curr_stat);
++
++            if ( curr_stat->fitness < min_stat_gc->fitness )
++                copy_stat(curr_stat, min_stat_gc);
++
++        }
++        miss_lines(1);
++
++        print_stat (min_stat_gc);
++
++        // if (min_stat_gc->generation_count == GC_ARRAY[GC_ITER-1])   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gc);
++}
++
++void extract_top_in_generation_sizes () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++
++    init(curr_stat);
++
++    printf("\n[INFO]\tBest Fitnesses Among Different Generation Sizes:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat_gs);
++        for (int j = 0; j < GC_ITER; j++) {
++
++            init(min_stat_gc);
++            for (int i = 0; i < curr_stat->generation_count; i++) {
++            
++                scan_stat (curr_stat);
++
++                if ( curr_stat->fitness < min_stat_gc->fitness )
++                    copy_stat(curr_stat, min_stat_gc);
++            }
++            miss_lines(1);
++
++            if ( min_stat_gc->fitness < min_stat_gs->fitness )
++                copy_stat(min_stat_gc, min_stat_gs);
++
++            if (j < GC_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++        }
++
++        print_stat (min_stat_gs);
++
++        // if (min_stat_gs->generation_size == GS_ARRAY[GS_ITER-1])   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++}
++
++void extract_top_in_mutation_rates () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_mr = (struct stats*)malloc (sizeof(struct stats));
++
++    init(curr_stat);
++
++    printf("\n[INFO]\tBest Fitnesses Among Different Mutation Rates:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat_mr);
++        for (int k = 0; k < GS_ITER; k++) {
++            
++            init(min_stat_gs);
++            for (int j = 0; j < GC_ITER; j++) {
++
++                init(min_stat_gc);
++                for (int i = 0; i < curr_stat->generation_count; i++) {
++
++                    scan_stat (curr_stat);
++
++                    if ( curr_stat->fitness < min_stat_gc->fitness )
++                        copy_stat(curr_stat, min_stat_gc);
++                }
++
++                miss_lines(1);
++
++                if ( min_stat_gc->fitness < min_stat_gs->fitness )
++                    copy_stat(min_stat_gc, min_stat_gs);
++
++                if (j < GC_ITER-1)
++                    fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++            }
++
++            if ( min_stat_gs->fitness < min_stat_mr->fitness )
++                copy_stat(min_stat_gs, min_stat_mr);
++
++            if (k < GS_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++        }
++
++        print_stat (min_stat_mr);
++
++        if (min_stat_mr->mutation_rate == MAX_MR/100)   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++    free(min_stat_mr);
++}
++
++void extract_top_in_general () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_mr = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat = (struct stats*)malloc (sizeof(struct stats));
++    
++    init(curr_stat);
++
++    printf("\n[INFO]\tGeneral Best Fitness:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat);
++        for (int z = 0; z < MR_ITER; z++) {
++
++            init(min_stat_mr);
++            for (int k = 0; k < GS_ITER; k++) {
++                
++                init(min_stat_gs);
++                for (int j = 0; j < GC_ITER; j++) {
++
++                    init(min_stat_gc);
++                    for (int i = 0; i < curr_stat->generation_count; i++) {
++
++                        scan_stat (curr_stat);
++
++                        if ( curr_stat->fitness < min_stat_gc->fitness )
++                            copy_stat(curr_stat, min_stat_gc);
++                    }
++
++                    miss_lines(1);
++
++                    if ( min_stat_gc->fitness < min_stat_gs->fitness )
++                        copy_stat(min_stat_gc, min_stat_gs);
++
++                    if (j < GC_ITER-1)
++                        fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++                }
++
++                if ( min_stat_gs->fitness < min_stat_mr->fitness )
++                    copy_stat(min_stat_gs, min_stat_mr);
++
++                if (k < GS_ITER-1)
++                    fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++            }
++
++            if ( min_stat_mr->fitness < min_stat->fitness )
++                    copy_stat(min_stat_mr, min_stat);
++
++            if (z < MR_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++                
++        }
++
++        print_stat (min_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++    free(min_stat_mr);
++}
++
++void create_db () {
++    
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    init(curr_stat);
++
++    // printf("\n[INFO]\tBest Fitnesses Among Different Generation Counts:\n\n");
++    print_header();
++
++    while( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++        
++        for (int i = 0; i < curr_stat->generation_count; i++){
++                scan_stat(curr_stat);
++                print_stat (curr_stat);
++        }
++
++        miss_lines(1);
++    }
++
++    free(curr_stat);
++}
++
++int main (int argc, char* argv[]) {
++
++    if ( argc < 4 ) {
++        
++        printf("%s%s%s%s%s%s\n", "[ERROR] Few arguments! \n\n",
++                                    "Usage:\n",
++                                    "\t[-S]\tFind the best fitness through generation counts\n",
++                                    "\t[-C]\tFind the best fitness through generation sizes.\n",
++                                    "\t[-M]\tFind the best fitnesses through mutation rates\n",
++                                    "\t[-G]\tFind the best fitness through entire configurations\n\n");
++        return 1;
++    }
++
++    filename = (char*) malloc (20*sizeof(char));
++    filename = argv[3];
++
++    fp = fopen(argv[2], "r");
++
++    if ( fp == NULL ) {
++        printf("file open error!\n");
++        return 1;
++    }
++    
++    switch (argv[1][1]) {
++        
++        case 'C':
++        {
++            extract_top_in_generation_counts ();
++            break;
++        }
++
++        case 'S':
++        {
++            extract_top_in_generation_sizes ();
++            break;
++        }
++
++        case 'M':
++        {
++            extract_top_in_mutation_rates ();
++            break;
++        }
++
++        case 'G':
++        {
++            extract_top_in_general ();
++            break;
++        }
++
++        case 'T':
++        {
++            create_db ();
++            break;
++        }
++
++        default:
++        {
++            printf("%s%s%s%s%s%s\n", "[ERROR] Wrong arguments! \n\n",
++                                    "Usage:\n",
++                                    "\t[-S]\tFind the best fitness through generation counts\n",
++                                    "\t[-C]\tFind the best fitness through generation sizes.\n",
++                                    "\t[-M]\tFind the best fitnesses through mutation rates\n",
++                                    "\t[-G]\tFind the best fitness through entire configurations\n\n");
++            return 1;
++        }
++    }
++    
++    fclose(fp);
++    return 0;
++}
+diff --git a/ODIN_II/findMinSize.c b/ODIN_II/findMinSize.c
+new file mode 100644
+index 000000000..88958ba7c
+--- /dev/null
++++ b/ODIN_II/findMinSize.c
+@@ -0,0 +1,401 @@
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <limits.h>
++#include <string.h>
++
++#define MIN_MR 10
++// #define MIN_GS 5
++// #define MIN_GC 1000
++ 
++#define MAX_MR 100
++// #define MAX_GS 15
++// #define MAX_GC 20000
++ 
++#define RATE_MR 10
++// #define RATE_GS 1
++// #define RATE_GC 1000
++
++#define MR_ITER (((MAX_MR - MIN_MR) + RATE_MR) / RATE_MR)
++// #define GS_ITER (((MAX_GS - MIN_GS) + RATE_GS) / RATE_GS)
++#define GS_ITER 5
++// #define GC_ITER (((MAX_GC - MIN_GC) + RATE_GC) / RATE_GC)
++#define GC_ITER 8
++
++int GS_ARRAY[GS_ITER]={1,2,4,8,16};
++int GC_ARRAY[GC_ITER]={256,512,1024,2048,4096,8192,16384,32768};
++
++FILE *fp = NULL;
++char *filename;
++
++struct stats {
++    float mutation_rate;
++    int generation_size;
++    int generation_count;
++    int generation_number;
++    float fitness;
++    int max_fanin;
++    int max_fanout;
++    int critical_path;
++    char* op;
++    int op_number;
++    int node_count;
++    int RCA_number;
++    int CSLA_number;
++    int BE_CSLA_number;
++} Stat;
++
++void init(struct stats* curr_stat){
++
++    curr_stat->mutation_rate = -1;
++    curr_stat->generation_size = -1;
++    curr_stat->generation_count = -1;
++    curr_stat->generation_number = -1;
++    curr_stat->fitness = INT_MAX;
++    curr_stat->max_fanin = -1;
++    curr_stat->max_fanout = -1;
++    curr_stat->critical_path = INT_MAX;
++    curr_stat->op = (char*)malloc (32*sizeof(char));
++    curr_stat->op_number = -1;
++    curr_stat->node_count = INT_MAX;
++    curr_stat->RCA_number = -1;
++    curr_stat->CSLA_number = -1;
++    curr_stat->BE_CSLA_number = -1;
++}
++
++void copy_stat(struct stats* copy_stat, struct stats* paste_stat) {
++
++    paste_stat->mutation_rate     = copy_stat->mutation_rate;
++    paste_stat->generation_size   = copy_stat->generation_size;
++    paste_stat->generation_count  = copy_stat->generation_count;
++    paste_stat->generation_number = copy_stat->generation_number;
++    paste_stat->fitness           = copy_stat->fitness;
++    paste_stat->max_fanin         = copy_stat->max_fanin;
++    paste_stat->max_fanout        = copy_stat->max_fanout;
++    paste_stat->critical_path     = copy_stat->critical_path;
++    paste_stat->op                = copy_stat->op;
++    paste_stat->op_number         = copy_stat->op_number;
++    paste_stat->node_count        = copy_stat->node_count;
++    paste_stat->RCA_number        = copy_stat->RCA_number;
++    paste_stat->CSLA_number       = copy_stat->CSLA_number;
++    paste_stat->BE_CSLA_number    = copy_stat->BE_CSLA_number;
++}
++
++void miss_lines (int num) {
++
++    char line[1024];
++
++    for (int i = 0; i < num; i++) 
++        fgets(line, sizeof(line), fp);
++}
++
++void scan_stat (struct stats* curr_stat) {
++
++    fscanf(fp, "%d,%f,%d,%d,%d,ADD,%d,%d,%d,%d,%d", 
++                &curr_stat->generation_number, &curr_stat->fitness, &curr_stat->critical_path, 
++                &curr_stat->max_fanin, &curr_stat->max_fanout, /*curr_stat->op,*/ &curr_stat->op_number, 
++                &curr_stat->node_count, &curr_stat->RCA_number, &curr_stat->CSLA_number, &curr_stat->BE_CSLA_number);
++}
++
++void print_header () {
++    printf("%s\n", "benchmark,mutation_rate,generation_size,generation_count,generation_number,fitness,critical_path,max_fanin,max_fanout,ADD,op_number,node_count,RCA_number,CSLA_number,BE_CSLA_number");
++}
++
++void print_stat (struct stats* temp) {
++
++    printf("%s,%.3f,%d,%d,", filename,temp->mutation_rate, temp->generation_size, temp->generation_count);
++    printf("%d,%f,%d,%d,%d,%s,%d,%d,%d,%d,%d\n", 
++            temp->generation_number, temp->fitness, temp->critical_path, temp->max_fanin,
++            temp->max_fanout, "ADD"/*first_min_stat->op*/, temp->op_number, temp->node_count,
++            temp->RCA_number, temp->CSLA_number, temp->BE_CSLA_number);
++}
++
++void extract_top_in_generation_counts () {
++    
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    init(curr_stat);
++
++    printf("\n[INFO]\tMin Critical Paths Among Different Generation Counts:\n\n");
++    print_header();
++
++    while( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++        
++        init(min_stat_gc);
++        for (int i = 0; i < curr_stat->generation_count; i++) {
++        
++            scan_stat (curr_stat);
++
++            if ( curr_stat->node_count < min_stat_gc->node_count )
++                copy_stat(curr_stat, min_stat_gc);
++
++        }
++        miss_lines(1);
++
++        print_stat (min_stat_gc);
++
++        // if (min_stat_gc->generation_count == GC_ARRAY[GC_ITER-1])   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gc);
++}
++
++void extract_top_in_generation_sizes () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++
++    init(curr_stat);
++
++    printf("\n[INFO]\tMin Critical Paths Among Different Generation Sizes:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat_gs);
++        for (int j = 0; j < GC_ITER; j++) {
++
++            init(min_stat_gc);
++            for (int i = 0; i < curr_stat->generation_count; i++) {
++            
++                scan_stat (curr_stat);
++
++                if ( curr_stat->node_count < min_stat_gc->node_count )
++                    copy_stat(curr_stat, min_stat_gc);
++            }
++            miss_lines(1);
++
++            if ( min_stat_gc->node_count < min_stat_gs->node_count )
++                copy_stat(min_stat_gc, min_stat_gs);
++
++            if (j < GC_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++        }
++
++        print_stat (min_stat_gs);
++
++        // if (min_stat_gs->generation_size == GS_ARRAY[GS_ITER-1])   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++}
++
++void extract_top_in_mutation_rates () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_mr = (struct stats*)malloc (sizeof(struct stats));
++
++    init(curr_stat);
++
++    printf("\n[INFO]\tMin Critical Paths Among Different Mutation Rates:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat_mr);
++        for (int k = 0; k < GS_ITER; k++) {
++            
++            init(min_stat_gs);
++            for (int j = 0; j < GC_ITER; j++) {
++
++                init(min_stat_gc);
++                for (int i = 0; i < curr_stat->generation_count; i++) {
++
++                    scan_stat (curr_stat);
++
++                    if ( curr_stat->node_count < min_stat_gc->node_count )
++                        copy_stat(curr_stat, min_stat_gc);
++                }
++
++                miss_lines(1);
++
++                if ( min_stat_gc->node_count < min_stat_gs->node_count )
++                    copy_stat(min_stat_gc, min_stat_gs);
++
++                if (j < GC_ITER-1)
++                    fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++            }
++
++            if ( min_stat_gs->node_count < min_stat_mr->node_count )
++                copy_stat(min_stat_gs, min_stat_mr);
++
++            if (k < GS_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++        }
++
++        print_stat (min_stat_mr);
++
++        // if (min_stat_mr->mutation_rate == MAX_MR/100)   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++    free(min_stat_mr);
++}
++
++void extract_top_in_general () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_mr = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat = (struct stats*)malloc (sizeof(struct stats));
++    
++    init(curr_stat);
++
++    printf("\n[INFO]\tGeneral MIN Critical Path:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat);
++        for (int z = 0; z < MR_ITER; z++) {
++
++            init(min_stat_mr);
++            for (int k = 0; k < GS_ITER; k++) {
++                
++                init(min_stat_gs);
++                for (int j = 0; j < GC_ITER; j++) {
++
++                    init(min_stat_gc);
++                    for (int i = 0; i < curr_stat->generation_count; i++) {
++
++                        scan_stat (curr_stat);
++
++                        if ( curr_stat->node_count < min_stat_gc->node_count )
++                            copy_stat(curr_stat, min_stat_gc);
++                    }
++
++                    miss_lines(1);
++
++                    if ( min_stat_gc->node_count < min_stat_gs->node_count )
++                        copy_stat(min_stat_gc, min_stat_gs);
++
++                    if (j < GC_ITER-1)
++                        fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++                }
++
++                if ( min_stat_gs->node_count < min_stat_mr->node_count )
++                    copy_stat(min_stat_gs, min_stat_mr);
++
++                if (k < GS_ITER-1)
++                    fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++            }
++
++            if ( min_stat_mr->node_count < min_stat->node_count )
++                    copy_stat(min_stat_mr, min_stat);
++
++            if (z < MR_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++                
++        }
++
++        print_stat (min_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++    free(min_stat_mr);
++}
++
++void create_db () {
++    
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    init(curr_stat);
++
++    print_header();
++
++    while( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++        
++        for (int i = 0; i < curr_stat->generation_count; i++){
++                scan_stat(curr_stat);
++                print_stat (curr_stat);
++        }
++
++        miss_lines(1);
++    }
++
++    free(curr_stat);
++}
++
++int main (int argc, char* argv[]) {
++
++    if ( argc < 4 ) {
++        
++        printf("%s%s%s%s%s%s\n", "[ERROR] Few arguments! \n\n",
++                                    "Usage:\n",
++                                    "\t[-S]\tFind the min critical path through generation counts\n",
++                                    "\t[-C]\tFind the min critical path through generation sizes.\n",
++                                    "\t[-M]\tFind the min critical path through mutation rates\n",
++                                    "\t[-G]\tFind the min critical path through entire configurations\n\n");
++        return 1;
++    }
++
++    filename = (char*) malloc (20*sizeof(char));
++    filename = argv[3];
++
++    fp = fopen(argv[2], "r");
++
++    if ( fp == NULL ) {
++        printf("file open error!\n");
++        return 1;
++    }
++    
++    switch (argv[1][1]) {
++        
++        case 'C':
++        {
++            extract_top_in_generation_counts ();
++            break;
++        }
++
++        case 'S':
++        {
++            extract_top_in_generation_sizes ();
++            break;
++        }
++
++        case 'M':
++        {
++            extract_top_in_mutation_rates ();
++            break;
++        }
++
++        case 'G':
++        {
++            extract_top_in_general ();
++            break;
++        }
++
++        case 'T':
++        {
++            create_db ();
++            break;
++        }
++
++        default:
++        {
++            printf("%s%s%s%s%s%s\n", "[ERROR] Wrong arguments! \n\n",
++                                    "Usage:\n",
++                                    "\t[-S]\tFind the min critical path through generation counts\n",
++                                    "\t[-C]\tFind the min critical path through generation sizes.\n",
++                                    "\t[-M]\tFind the min critical path through mutation rates\n",
++                                    "\t[-G]\tFind the min critical path through entire configurations\n\n");
++            return 1;
++        }
++    }
++    
++    fclose(fp);
++    return 0;
++}
+diff --git a/ODIN_II/findTopFitnesses.c b/ODIN_II/findTopFitnesses.c
+new file mode 100644
+index 000000000..3deb9cb31
+--- /dev/null
++++ b/ODIN_II/findTopFitnesses.c
+@@ -0,0 +1,397 @@
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <limits.h>
++#include <string.h>
++
++#define MIN_MR 10
++#define MIN_GS 5
++#define MIN_GC 1000
++ 
++#define MAX_MR 100
++#define MAX_GS 15
++#define MAX_GC 20000
++ 
++#define RATE_MR 10
++#define RATE_GS 1
++#define RATE_GC 1000
++
++#define MR_ITER (((MAX_MR - MIN_MR) + RATE_MR) / RATE_MR)
++#define GS_ITER (((MAX_GS - MIN_GS) + RATE_GS) / RATE_GS)
++#define GC_ITER (((MAX_GC - MIN_GC) + RATE_GC) / RATE_GC)
++
++FILE *fp = NULL;
++char *filename;
++
++struct stats {
++    float mutation_rate;
++    int generation_size;
++    int generation_count;
++    int generation_number;
++    float fitness;
++    int max_fanin;
++    int max_fanout;
++    int critical_path;
++    char* op;
++    int op_number;
++    int node_count;
++    int RCA_number;
++    int CSLA_number;
++    int BE_CSLA_number;
++} Stat;
++
++void init(struct stats* curr_stat){
++
++    curr_stat->mutation_rate = -1;
++    curr_stat->generation_size = -1;
++    curr_stat->generation_count = -1;
++    curr_stat->generation_number = -1;
++    curr_stat->fitness = INT_MAX;
++    curr_stat->max_fanin = -1;
++    curr_stat->max_fanout = -1;
++    curr_stat->critical_path = -1;
++    curr_stat->op = (char*)malloc (32*sizeof(char));
++    curr_stat->op_number = -1;
++    curr_stat->node_count = -1;
++    curr_stat->RCA_number = -1;
++    curr_stat->CSLA_number = -1;
++    curr_stat->BE_CSLA_number = -1;
++}
++
++void copy_stat(struct stats* copy_stat, struct stats* paste_stat) {
++
++    paste_stat->mutation_rate     = copy_stat->mutation_rate;
++    paste_stat->generation_size   = copy_stat->generation_size;
++    paste_stat->generation_count  = copy_stat->generation_count;
++    paste_stat->generation_number = copy_stat->generation_number;
++    paste_stat->fitness           = copy_stat->fitness;
++    paste_stat->max_fanin         = copy_stat->max_fanin;
++    paste_stat->max_fanout        = copy_stat->max_fanout;
++    paste_stat->critical_path     = copy_stat->critical_path;
++    paste_stat->op                = copy_stat->op;
++    paste_stat->op_number         = copy_stat->op_number;
++    paste_stat->node_count        = copy_stat->node_count;
++    paste_stat->RCA_number        = copy_stat->RCA_number;
++    paste_stat->CSLA_number       = copy_stat->CSLA_number;
++    paste_stat->BE_CSLA_number    = copy_stat->BE_CSLA_number;
++}
++
++void miss_lines (int num) {
++
++    char line[1024];
++
++    for (int i = 0; i < num; i++) 
++        fgets(line, sizeof(line), fp);
++}
++
++void scan_stat (struct stats* curr_stat) {
++
++    fscanf(fp, "%d,%f,%d,%d,%d,ADD,%d,%d,%d,%d,%d", 
++                &curr_stat->generation_number, &curr_stat->fitness, &curr_stat->critical_path, 
++                &curr_stat->max_fanin, &curr_stat->max_fanout, /*curr_stat->op,*/ &curr_stat->op_number, 
++                &curr_stat->node_count, &curr_stat->RCA_number, &curr_stat->CSLA_number, &curr_stat->BE_CSLA_number);
++}
++
++void print_header () {
++    printf("%s\n", "benchmark,mutation_rate,generation_size,generation_count,generation_number,fitness,critical_path,max_fanin,max_fanout,ADD,op_number,node_count,RCA_number,CSLA_number,BE_CSLA_number");
++}
++
++void print_stat (struct stats* temp) {
++
++    printf("%s,%.3f,%d,%d,", filename,temp->mutation_rate, temp->generation_size, temp->generation_count);
++    printf("%d,%f,%d,%d,%d,%s,%d,%d,%d,%d,%d\n", 
++            temp->generation_number, temp->fitness, temp->critical_path, temp->max_fanin,
++            temp->max_fanout, "ADD"/*first_min_stat->op*/, temp->op_number, temp->node_count,
++            temp->RCA_number, temp->CSLA_number, temp->BE_CSLA_number);
++}
++
++void extract_top_in_generation_counts () {
++    
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    init(curr_stat);
++
++    printf("\n[INFO]\tBest Fitnesses Among Different Generation Counts:\n\n");
++    print_header();
++
++    while( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++        
++        init(min_stat_gc);
++        for (int i = 0; i < curr_stat->generation_count; i++) {
++        
++            scan_stat (curr_stat);
++
++            if ( curr_stat->fitness < min_stat_gc->fitness )
++                copy_stat(curr_stat, min_stat_gc);
++
++        }
++        miss_lines(1);
++
++        print_stat (min_stat_gc);
++
++        if (min_stat_gc->generation_count == MAX_GC)   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gc);
++}
++
++void extract_top_in_generation_sizes () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++
++    init(curr_stat);
++
++    printf("\n[INFO]\tBest Fitnesses Among Different Generation Sizes:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat_gs);
++        for (int j = 0; j < GC_ITER; j++) {
++
++            init(min_stat_gc);
++            for (int i = 0; i < curr_stat->generation_count; i++) {
++            
++                scan_stat (curr_stat);
++
++                if ( curr_stat->fitness < min_stat_gc->fitness )
++                    copy_stat(curr_stat, min_stat_gc);
++            }
++            miss_lines(1);
++
++            if ( min_stat_gc->fitness < min_stat_gs->fitness )
++                copy_stat(min_stat_gc, min_stat_gs);
++
++            if (j < GC_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++        }
++
++        print_stat (min_stat_gs);
++
++        if (min_stat_gs->generation_size == MAX_GS)   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++}
++
++void extract_top_in_mutation_rates () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_mr = (struct stats*)malloc (sizeof(struct stats));
++
++    init(curr_stat);
++
++    printf("\n[INFO]\tBest Fitnesses Among Different Mutation Rates:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat_mr);
++        for (int k = 0; k < GS_ITER; k++) {
++            
++            init(min_stat_gs);
++            for (int j = 0; j < GC_ITER; j++) {
++
++                init(min_stat_gc);
++                for (int i = 0; i < curr_stat->generation_count; i++) {
++
++                    scan_stat (curr_stat);
++
++                    if ( curr_stat->fitness < min_stat_gc->fitness )
++                        copy_stat(curr_stat, min_stat_gc);
++                }
++
++                miss_lines(1);
++
++                if ( min_stat_gc->fitness < min_stat_gs->fitness )
++                    copy_stat(min_stat_gc, min_stat_gs);
++
++                if (j < GC_ITER-1)
++                    fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++            }
++
++            if ( min_stat_gs->fitness < min_stat_mr->fitness )
++                copy_stat(min_stat_gs, min_stat_mr);
++
++            if (k < GS_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++        }
++
++        print_stat (min_stat_mr);
++
++        if (min_stat_mr->mutation_rate == MAX_MR/100)   printf("\n\n\n\n");
++        init(curr_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++    free(min_stat_mr);
++}
++
++void extract_top_in_general () {
++        
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gs = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_gc = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat_mr = (struct stats*)malloc (sizeof(struct stats));
++    struct stats* min_stat = (struct stats*)malloc (sizeof(struct stats));
++    
++    init(curr_stat);
++
++    printf("\n[INFO]\tGeneral Best Fitness:\n\n");
++    print_header();
++
++    while ( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++
++        init(min_stat);
++        for (int z = 0; z < MR_ITER; z++) {
++
++            init(min_stat_mr);
++            for (int k = 0; k < GS_ITER; k++) {
++                
++                init(min_stat_gs);
++                for (int j = 0; j < GC_ITER; j++) {
++
++                    init(min_stat_gc);
++                    for (int i = 0; i < curr_stat->generation_count; i++) {
++
++                        scan_stat (curr_stat);
++
++                        if ( curr_stat->fitness < min_stat_gc->fitness )
++                            copy_stat(curr_stat, min_stat_gc);
++                    }
++
++                    miss_lines(1);
++
++                    if ( min_stat_gc->fitness < min_stat_gs->fitness )
++                        copy_stat(min_stat_gc, min_stat_gs);
++
++                    if (j < GC_ITER-1)
++                        fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++                }
++
++                if ( min_stat_gs->fitness < min_stat_mr->fitness )
++                    copy_stat(min_stat_gs, min_stat_mr);
++
++                if (k < GS_ITER-1)
++                    fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++            }
++
++            if ( min_stat_mr->fitness < min_stat->fitness )
++                    copy_stat(min_stat_mr, min_stat);
++
++            if (z < MR_ITER-1)
++                fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count);
++                
++        }
++
++        print_stat (min_stat);
++    }
++
++    free(curr_stat);
++    free(min_stat_gs);
++    free(min_stat_gc);
++    free(min_stat_mr);
++}
++
++void create_db () {
++    
++    struct stats* curr_stat = (struct stats*)malloc (sizeof(struct stats));
++    init(curr_stat);
++
++    // printf("\n[INFO]\tBest Fitnesses Among Different Generation Counts:\n\n");
++    print_header();
++
++    while( fscanf(fp, "%f,%d,%d", &curr_stat->mutation_rate, &curr_stat->generation_size, &curr_stat->generation_count) != EOF ) {
++        
++        for (int i = 0; i < curr_stat->generation_count; i++){
++                scan_stat(curr_stat);
++                print_stat (curr_stat);
++        }
++
++        miss_lines(1);
++    }
++
++    free(curr_stat);
++}
++
++int main (int argc, char* argv[]) {
++
++    if ( argc < 4 ) {
++        
++        printf("%s%s%s%s%s%s\n", "[ERROR] Few arguments! \n\n",
++                                    "Usage:\n",
++                                    "\t[-S]\tFind the best fitness through generation counts\n",
++                                    "\t[-C]\tFind the best fitness through generation sizes.\n",
++                                    "\t[-M]\tFind the best fitnesses through mutation rates\n",
++                                    "\t[-G]\tFind the best fitness through entire configurations\n\n");
++        return 1;
++    }
++
++    filename = (char*) malloc (20*sizeof(char));
++    filename = argv[3];
++
++    fp = fopen(argv[2], "r");
++
++    if ( fp == NULL ) {
++        printf("file open error!\n");
++        return 1;
++    }
++    
++    switch (argv[1][1]) {
++        
++        case 'C':
++        {
++            extract_top_in_generation_counts ();
++            break;
++        }
++
++        case 'S':
++        {
++            extract_top_in_generation_sizes ();
++            break;
++        }
++
++        case 'M':
++        {
++            extract_top_in_mutation_rates ();
++            break;
++        }
++
++        case 'G':
++        {
++            extract_top_in_general ();
++            break;
++        }
++
++        case 'T':
++        {
++            create_db ();
++            break;
++        }
++
++        default:
++        {
++            printf("%s%s%s%s%s%s\n", "[ERROR] Wrong arguments! \n\n",
++                                    "Usage:\n",
++                                    "\t[-S]\tFind the best fitness through generation counts\n",
++                                    "\t[-C]\tFind the best fitness through generation sizes.\n",
++                                    "\t[-M]\tFind the best fitnesses through mutation rates\n",
++                                    "\t[-G]\tFind the best fitness through entire configurations\n\n");
++            return 1;
++        }
++    }
++    
++    fclose(fp);
++    return 0;
++}
+diff --git a/ODIN_II/ga_script.sh b/ODIN_II/ga_script.sh
+new file mode 100755
+index 000000000..ae93590cd
+--- /dev/null
++++ b/ODIN_II/ga_script.sh
+@@ -0,0 +1,184 @@
++#!/bin/bash
++# Run GA script
++
++
++################################################
++##################--GLOBALS--###################
++################################################
++footprint=2
++DEFAULT_MR=50
++DEFAULT_GS=6
++DEFAULT_GC=1000
++WIDE_PATH="==========================================="
++
++################################################
++
++TESTS_PATH="./regression_test/benchmark/verilog/ga"
++GA_OUTPUTS_DIR="./ga_outputs"
++NEW_DIR=""
++RUN_PATH=""
++
++
++################################################
++################--FUNCTIONS--###################
++################################################
++# Init Directories and cleanup
++function helpFunction()
++{
++   echo ""
++   echo -e "Specify the default values\n"
++   echo "Usage: $0 [-m Mutation Rate (0-100)] [-s Generation Size [1-20]]"
++   echo -e "\t[-c Generation Count [1K-100K]]"
++   echo ""
++   exit 1 # Exit script after printing help
++}
++
++function print_config () {
++        
++        printf "\n$WIDE_PATH\n"
++        printf "\t-Mutation rate: %d%%\n\t-Generation size: %d\n\t-Generation count: %d\n" $DEFAULT_MR $DEFAULT_GS $DEFAULT_GC
++        printf "$WIDE_PATH\n\n"
++}
++
++function check_dir () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)
++ }
++
++
++
++################################################
++##################--MAIN--######################
++################################################
++while getopts ":m:s:c:h:" opt;
++do
++        case "$opt" in
++
++                m) _MR=${OPTARG}
++                ;;
++                s) _GS=${OPTARG}
++                ;;
++                c) _GC=${OPTARG}
++                ;;
++                ?) helpFunction
++                ;;
++        esac
++                
++done
++
++if [ -n "$_MR" ]
++then
++        DEFAULT_MR=$_MR
++fi
++if [ -n "$_GS" ]
++then
++        DEFAULT_GS=$_GS
++fi
++if [ -n "$_GC" ]
++then
++        DEFAULT_GC=$_GC
++fi
++
++print_config
++
++#make debug
++gcc ./tocsv.c -o tocsv -std=c99
++
++check_dir
++mkdir -p ${NEW_DIR}
++
++printf "\n-------------------- Running Odin-II for test cases! --------------------\n"
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++
++        if [ "$filename" == "*" ];
++        then
++                printf "\n** ERROR: No file exists! **\n\n"
++                exit 1
++        fi
++
++        mkdir ${NEW_DIR}/$filename
++        RUN_PATH=${NEW_DIR}/$filename
++        mkdir -p ${NEW_DIR}/overall_csv/$filename
++        OCSV_PATH=${NEW_DIR}/overall_csv/$filename
++        
++        mkdir ${RUN_PATH}/mutation_rate_changing
++        mkdir ${RUN_PATH}/mutation_rate_changing/csv
++
++        generation_size=$DEFAULT_GS
++        generation_count=$DEFAULT_GC
++        
++        start=$(date +%s%N)/1000000
++        for ((mr=5; mr<=100; mr=mr+5))
++        do
++                ./odin_II -V $file --GA $footprint --GA-MR $mr --GA-GS $generation_size --GA-GC $generation_count > ${RUN_PATH}/mutation_rate_changing/$filename-MR_$mr%-GS_$generation_size-GC_$generation_count.out && 
++                ./tocsv ${RUN_PATH}/mutation_rate_changing/$filename-MR_$mr%-GS_$generation_size-GC_$generation_count.out > ${RUN_PATH}/mutation_rate_changing/csv/$filename-MR_$mr%-GS_$generation_size-GC_$generation_count.csv &
++        done
++        end=$(date +%s%N)/1000000
++
++        printf "Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++        echo "$filename -- Mutation Rate Changing:" 
++        ls ${RUN_PATH}/mutation_rate_changing/
++        printf "\n"
++
++
++        ##########################################################
++        # fix mutation rate and generation count! increase the generation size by 1 till 20
++        mkdir ${RUN_PATH}/generation_size_changing
++        mkdir ${RUN_PATH}/generation_size_changing/csv
++
++        mutation_rate=$DEFAULT_MR
++        generation_count=$DEFAULT_GC
++
++        start=$(date +%s%N)/1000000
++        for ((gs=1; gs<=20; gs++))
++        do
++                ./odin_II -V $file --GA $footprint --GA-MR $mutation_rate --GA-GS $gs --GA-GC $generation_count > ${RUN_PATH}/generation_size_changing/$filename-MR_$mutation_rate%-GS_$gs-GC_$generation_count.out && 
++                ./tocsv ${RUN_PATH}/generation_size_changing/$filename-MR_$mutation_rate%-GS_$gs-GC_$generation_count.out > ${RUN_PATH}/generation_size_changing/csv/$filename-MR_$mutation_rate%-GS_$gs-GC_$generation_count.csv &
++        done
++        end=$(date +%s%N)/1000000
++
++        printf "Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++        echo "$filename -- Generation Size Changing:"
++        ls ${RUN_PATH}/generation_size_changing/
++        printf "\n"
++
++
++        ##########################################################
++        # fix mutation rate and generation size! increase the generation count by 1000 till 100K
++        mkdir ${RUN_PATH}/generation_count_changing
++        mkdir ${RUN_PATH}/generation_count_changing/csv
++
++        mutation_rate=$DEFAULT_MR
++        generation_size=$DEFAULT_GS
++
++        start=$(date +%s%N)/1000000
++        for ((gc=1000; gc<=50000; gc=gc+500))
++        do
++                ./odin_II -V $file --GA $footprint --GA-MR $mutation_rate --GA-GS $generation_size --GA-GC $gc > ${RUN_PATH}/generation_count_changing/$filename-MR_$mutation_rate%-GS_$generation_size-GC_$gc.out &&
++                ./tocsv ${RUN_PATH}/generation_count_changing/$filename-MR_$mutation_rate%-GS_$generation_size-GC_$gc.out > ${RUN_PATH}/generation_count_changing/csv/$filename-MR_$mutation_rate%-GS_$generation_size-GC_$gc.csv &
++        done
++        end=$(date +%s%N)/1000000
++
++        printf "Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++        echo "$filename -- Generation Count Changing:"
++        ls ${RUN_PATH}/generation_count_changing/
++        printf "\n\n"
++
++done
++
++wait
++printf "\n-------------------- Generating general csv files --------------------\n\n"
++./tocsv_script.sh
+diff --git a/ODIN_II/ga_script2.sh b/ODIN_II/ga_script2.sh
+new file mode 100755
+index 000000000..86834011b
+--- /dev/null
++++ b/ODIN_II/ga_script2.sh
+@@ -0,0 +1,285 @@
++#!/bin/bash
++# Run GA script
++
++
++################################################################################################
++##########################################--GLOBALS--###########################################
++################################################################################################
++footprint=2
++DEFAULT_MR=50
++DEFAULT_GS=6
++DEFAULT_GC=1000
++
++MIN_MR=10
++MIN_GS=5
++MIN_GC=1000
++
++MAX_MR=100
++MAX_GS=15
++MAX_GC=20000
++
++RATE_MR=10
++RATE_GS=1
++RATE_GC=1000
++
++WIDE_PATH="==========================================="
++
++################################################
++
++TESTS_PATH="./regression_test/benchmark/verilog/ga"
++GA_OUTPUTS_DIR="./ga_outputs"
++NEW_DIR=""
++RUN_PATH=""
++################################################################################################
++########################################--FUNCTIONS--###########################################
++################################################################################################
++# Init Directories and cleanup
++function helpFunction()
++{
++   echo ""
++   echo -e "Specify the default values\n"
++   echo "Usage: $0 [-m Mutation Rate (0-100)] [-s Generation Size [1-20]]"
++   echo -e "\t[-c Generation Count [1K-100K]]"
++   echo ""
++   exit 1 # Exit script after printing help
++}
++
++function print_config () {
++        
++        printf "\n$WIDE_PATH\n"
++        printf "[INFO] Default Values\n\t- Mutation rate: %d%%\n\t- Generation size: %d\n\t- Generation count: %d\n" $DEFAULT_MR $DEFAULT_GS $DEFAULT_GC
++        printf "$WIDE_PATH\n\n"
++}
++
++function check_dir () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)
++ }
++
++# Init Directories and cleanup
++ function check_dir_csv () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $(($counter-1)))
++ }
++
++
++################################################################################################
++###########################################--MAIN--#############################################
++############################################--GA--##############################################
++################################################################################################
++while getopts ":m:s:c:h:" opt;
++do
++        case "$opt" in
++
++                m) _MR=${OPTARG}
++                ;;
++                s) _GS=${OPTARG}
++                ;;
++                c) _GC=${OPTARG}
++                ;;
++                ?) helpFunction
++                ;;
++        esac
++                
++done
++
++if [ -n "$_MR" ]
++then
++        DEFAULT_MR=$_MR
++fi
++if [ -n "$_GS" ]
++then
++        DEFAULT_GS=$_GS
++fi
++if [ -n "$_GC" ]
++then
++        DEFAULT_GC=$_GC
++fi
++
++print_config
++
++#make debug
++gcc ./tocsv.c -o tocsv -std=c99
++
++check_dir
++mkdir -p ${NEW_DIR}
++
++printf "\n-------------------- Running Odin-II for test cases! --------------------\n"
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++
++        if [ "$filename" == "*" ];
++        then
++                printf "\n[INFO] ** ERROR: No file exists! **\n\n"
++                exit 1
++        fi
++
++        mkdir ${NEW_DIR}/$filename
++        RUN_PATH=${NEW_DIR}/$filename
++        mkdir -p ${RUN_PATH}/csv
++
++        generation_size=$DEFAULT_GS
++        generation_count=$DEFAULT_GC
++        
++        start=$(date +%s%N)/1000000
++        for ((mr=$MIN_MR; mr<=$MAX_MR; mr=mr+$RATE_MR))
++        do
++                ##########################################################
++                # fix mutation rate and generation count! increase the generation size by 1 till 20
++                mkdir -p ${RUN_PATH}/MR$mr
++                curr_mr_folder=${RUN_PATH}/MR$mr
++                mkdir -p ${curr_mr_folder}/csv
++
++                start=$(date +%s%N)/1000000
++                for ((gs=$MIN_GS; gs<=$MAX_GS; gs=gs+$RATE_GS))
++                do
++                        ##########################################################
++                        # fix mutation rate and generation size! increase the generation count by 1000 till 100K
++                        mkdir -p ${curr_mr_folder}/GS$gs
++                        curr_mr_gs_folder=${curr_mr_folder}/GS$gs
++                        mkdir -p ${curr_mr_gs_folder}/csv
++
++                        start=$(date +%s%N)/1000000
++                        for ((gc=$MIN_GC; gc<=$MAX_GC; gc=gc+$RATE_GC))
++                        do
++
++                                mkdir -p ${curr_mr_gs_folder}/GC$gc
++                                curr_mr_gs_gc_folder=${curr_mr_gs_folder}/GC$gc
++                                mkdir -p ${curr_mr_gs_gc_folder}/csv
++                        
++                                ./odin_II -V $file --GA $footprint --GA-MR $mr --GA-GS $gs --GA-GC $gc > ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_$gs-GC_$gc.out &&
++                                ./tocsv ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_$gs-GC_$gc.out > ${curr_mr_gs_gc_folder}/csv/$filename-MR_$mr%-GS_$gs-GC_$gc.csv &
++                        done
++                        end=$(date +%s%N)/1000000
++
++                        printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++                        echo "$filename MR:$mr GS:$gs -- Generation Count Changing:"
++                        ls ${curr_mr_gs_gc_folder}/
++                        printf "\n\n"
++                wait   
++                done
++                end=$(date +%s%N)/1000000
++
++                printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++                echo "$filename MR:$mr -- Generation Size Changing:"
++                ls ${curr_mr_gs_folder}/
++                printf "\n"
++        # wait
++        done
++        end=$(date +%s%N)/1000000
++
++        printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++        echo "$filename -- Mutation Rate Changing:" 
++        ls ${curr_mr_folder}/
++        printf "\n"
++done
++
++
++################################################################################################
++############################################--CSV--#############################################
++################################################################################################
++printf "\n-------------------- Generating general csv files --------------------\n\n"
++check_dir_csv
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++        RUN_PATH=${NEW_DIR}/$filename
++        
++        start=$(date +%s%N)/1000000
++        for ((mr=$MIN_MR; mr<=$MAX_MR; mr=mr+$RATE_MR))
++        do
++            start=$(date +%s%N)/1000000
++            for ((gs=$MIN_GS; gs<=$MAX_GS; gs=gs+$RATE_GS))
++            do
++                start=$(date +%s%N)/1000000
++                for ((gc=$MIN_GC; gc<=$MAX_GC; gc=gc+$RATE_GC))
++                do
++
++                    curr_mr_gs_gc_folder=${RUN_PATH}/MR$mr/GS$gs/GC$gc
++                    curr_mr_gs_folder=${RUN_PATH}/MR$mr/GS$gs
++                    (./tocsv ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_$gs-GC_$gc.out && printf "\n\n") >> ${curr_mr_gs_folder}/csv/overall_$filename-MR_$mr%-GS_$gs-GC_${MIN_GC}k-${MAX_GC}k.csv &
++
++                    curr_mr_folder=${RUN_PATH}/MR$mr
++                    (./tocsv ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_$gs-GC_$gc.out && printf "\n\n") >> ${curr_mr_folder}/csv/overall_$filename-MR_$mr%-GS_${MIN_GS}-${MAX_GS}-GC_${MIN_GC}k-${MAX_GC}k.csv &
++
++                    curr_folder=${RUN_PATH}
++                    (./tocsv ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_$gs-GC_$gc.out && printf "\n\n") >> ${curr_folder}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${MIN_GS}-${MAX_GS}-GC_${MIN_GC}k-${MAX_GC}k.csv &
++
++                    wait            
++                done
++                end=$(date +%s%N)/1000000
++                printf "Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++                echo "[INFO] MR:$mr GS:$gs -- General CSV Generation"
++                printf "\n"                  
++            done
++            end=$(date +%s%N)/1000000
++            printf "Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++            echo "[INFO] MR:$mr --DONE-- General CSV Generation"
++            printf "\n"
++        done
++        end=$(date +%s%N)/1000000
++
++        printf "Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++        echo "[INFO] $filename -- General CSV Generation"
++        printf "\n"
++
++done
++
++
++
++################################################################################################
++#########################################--CHART CSV--##########################################
++################################################################################################
++start=$(date +%s%N)/1000000
++printf "\n-------------------- Generating general chart.csv files --------------------\n\n"
++gcc ./findTopFitnesses.c -o findTopFitnesses -std=c99
++
++check_dir_csv
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++        RUN_PATH=${NEW_DIR}/$filename
++        mkdir -p ${RUN_PATH}/charts
++        CHART_PATH=${RUN_PATH}/charts
++
++        ./findTopFitnesses -T ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${MIN_GS}-${MAX_GS}-GC_${MIN_GC}k-${MAX_GC}k.csv $filename > ${CHART_PATH}/db.csv &
++
++        ./findTopFitnesses -C ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${MIN_GS}-${MAX_GS}-GC_${MIN_GC}k-${MAX_GC}k.csv $filename > ${CHART_PATH}/chart_gc.csv &
++
++        ./findTopFitnesses -S ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${MIN_GS}-${MAX_GS}-GC_${MIN_GC}k-${MAX_GC}k.csv $filename > ${CHART_PATH}/chart_gs.csv &
++
++        ./findTopFitnesses -M ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${MIN_GS}-${MAX_GS}-GC_${MIN_GC}k-${MAX_GC}k.csv $filename > ${CHART_PATH}/chart_mr.csv &
++
++        ./findTopFitnesses -G ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${MIN_GS}-${MAX_GS}-GC_${MIN_GC}k-${MAX_GC}k.csv $filename > ${CHART_PATH}/chart.csv 
++
++        wait
++done
++end=$(date +%s%N)/1000000
++
++printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++echo "[INFO] $filename -- General Chart CSV Generation"
+diff --git a/ODIN_II/ga_script3.sh b/ODIN_II/ga_script3.sh
+new file mode 100755
+index 000000000..19d3fd8e4
+--- /dev/null
++++ b/ODIN_II/ga_script3.sh
+@@ -0,0 +1,284 @@
++#!/bin/bash
++# Run GA script
++
++
++################################################################################################
++##########################################--GLOBALS--###########################################
++################################################################################################
++footprint=2
++DEFAULT_MR=50
++DEFAULT_GS=6
++DEFAULT_GC=1000
++
++MIN_MR=60
++MAX_MR=60
++RATE_MR=5
++
++GS_ARRAY=(8)
++# 2 4 8 16 32 64)
++GS_ARRAY_SIZE=1
++GC_ARRAY=(1024)
++# 256 512 1024 2048 4096 8192 16384 32768)
++GC_ARRAY_SIZE=1
++
++WIDE_PATH="==========================================="
++
++################################################
++
++TESTS_PATH="./regression_test/benchmark/verilog/ga"
++GA_OUTPUTS_DIR="./ga_outputs"
++NEW_DIR=""
++RUN_PATH=""
++################################################################################################
++########################################--FUNCTIONS--###########################################
++################################################################################################
++# Init Directories and cleanup
++function helpFunction()
++{
++   echo ""
++   echo -e "Specify the default values\n"
++   echo "Usage: $0 [-m Mutation Rate (0-100)] [-s Generation Size [1-20]]"
++   echo -e "\t[-c Generation Count [1K-100K]]"
++   echo ""
++   exit 1 # Exit script after printing help
++}
++
++function print_config () {
++        
++        printf "\n$WIDE_PATH\n"
++        printf "[INFO] Default Values\n\t- Mutation rate: %d%%\n\t- Generation size: %d\n\t- Generation count: %d\n" $DEFAULT_MR $DEFAULT_GS $DEFAULT_GC
++        printf "$WIDE_PATH\n\n"
++}
++
++function check_dir () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)
++ }
++
++# Init Directories and cleanup
++ function check_dir_csv () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $(($counter-1)))
++ }
++
++
++################################################################################################
++###########################################--MAIN--#############################################
++############################################--GA--##############################################
++################################################################################################
++while getopts ":m:s:c:h:" opt;
++do
++        case "$opt" in
++
++                m) _MR=${OPTARG}
++                ;;
++                s) _GS=${OPTARG}
++                ;;
++                c) _GC=${OPTARG}
++                ;;
++                ?) helpFunction
++                ;;
++        esac
++                
++done
++
++if [ -n "$_MR" ]
++then
++        DEFAULT_MR=$_MR
++fi
++if [ -n "$_GS" ]
++then
++        DEFAULT_GS=$_GS
++fi
++if [ -n "$_GC" ]
++then
++        DEFAULT_GC=$_GC
++fi
++
++print_config
++
++#make debug
++gcc ./tocsv.c -o tocsv -std=c99
++
++check_dir
++mkdir -p ${NEW_DIR}
++
++printf "\n-------------------- Running Odin-II for test cases! --------------------\n"
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++
++        if [ "$filename" == "*" ];
++        then
++                printf "\n[INFO] ** ERROR: No file exists! **\n\n"
++                exit 1
++        fi
++
++        mkdir ${NEW_DIR}/$filename
++        RUN_PATH=${NEW_DIR}/$filename
++        mkdir -p ${RUN_PATH}/csv
++
++        generation_size=$DEFAULT_GS
++        generation_count=$DEFAULT_GC
++        
++        start=$(date +%s%N)/1000000
++        for ((mr=$MIN_MR; mr<=$MAX_MR; mr=mr+$RATE_MR))
++        do
++                ##########################################################
++                # fix mutation rate and generation count! increase the generation size by 1 till 20
++                mkdir -p ${RUN_PATH}/MR$mr
++                curr_mr_folder=${RUN_PATH}/MR$mr
++                mkdir -p ${curr_mr_folder}/csv
++
++                start=$(date +%s%N)/1000000
++                for ((gs_index=0; gs_index<$GS_ARRAY_SIZE; gs_index=gs_index+1))
++                do
++                        ##########################################################
++                        # fix mutation rate and generation size! increase the generation count by 1000 till 100K
++                        mkdir -p ${curr_mr_folder}/GS${GS_ARRAY[gs_index]}
++                        curr_mr_gs_folder=${curr_mr_folder}/GS${GS_ARRAY[gs_index]}
++                        mkdir -p ${curr_mr_gs_folder}/csv
++
++                        start=$(date +%s%N)/1000000
++                        for ((gc_index=0; gc_index<$GC_ARRAY_SIZE; gc_index=gc_index+1))
++                        do
++
++                                mkdir -p ${curr_mr_gs_folder}/GC${GC_ARRAY[gc_index]}
++                                curr_mr_gs_gc_folder=${curr_mr_gs_folder}/GC${GC_ARRAY[gc_index]}
++                                mkdir -p ${curr_mr_gs_gc_folder}/csv
++                        
++                                ./odin_II -V $file -o ${curr_mr_gs_gc_folder}/blif.out --GA $footprint --GA-MR $mr --GA-GS ${GS_ARRAY[gs_index]} --GA-GC ${GC_ARRAY[gc_index]} > ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_${GS_ARRAY[gs_index]}-GC_${GC_ARRAY[gc_index]}.out &&
++                                ./tocsv ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_${GS_ARRAY[gs_index]}-GC_${GC_ARRAY[gc_index]}.out > ${curr_mr_gs_gc_folder}/csv/$filename-MR_$mr%-GS_${GS_ARRAY[gs_index]}-GC_${GC_ARRAY[gc_index]}.csv &
++                        done
++                        end=$(date +%s%N)/1000000
++
++                        printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++                        echo "$filename MR:$mr GS:${GS_ARRAY[gs_index]} -- Generation Count Changing:"
++                        ls ${curr_mr_gs_gc_folder}/
++                        printf "\n\n"
++                # wait   
++                done
++                end=$(date +%s%N)/1000000
++
++                printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++                echo "$filename MR:$mr -- Generation Size Changing:"
++                ls ${curr_mr_gs_folder}/
++                printf "\n"
++        # wait
++        done
++        end=$(date +%s%N)/1000000
++
++        printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++        echo "$filename -- Mutation Rate Changing:" 
++        ls ${curr_mr_folder}/
++        printf "\n"
++done
++
++wait
++################################################################################################
++############################################--CSV--#############################################
++################################################################################################
++printf "\n-------------------- Generating general csv files --------------------\n\n"
++check_dir_csv
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++        RUN_PATH=${NEW_DIR}/$filename
++        
++        start=$(date +%s%N)/1000000
++        for ((mr=$MIN_MR; mr<=$MAX_MR; mr=mr+$RATE_MR))
++        do
++            start=$(date +%s%N)/1000000
++            for ((gs_index=0; gs_index<$GS_ARRAY_SIZE; gs_index=gs_index+1))
++            do
++                start=$(date +%s%N)/1000000
++                for ((gc_index=0; gc_index<$GC_ARRAY_SIZE; gc_index=gc_index+1))
++                do
++
++                    curr_mr_gs_gc_folder=${RUN_PATH}/MR$mr/GS${GS_ARRAY[gs_index]}/GC${GC_ARRAY[gc_index]}
++                    curr_mr_gs_folder=${RUN_PATH}/MR$mr/GS${GS_ARRAY[gs_index]}
++                    (./tocsv ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_${GS_ARRAY[gs_index]}-GC_${GC_ARRAY[gc_index]}.out && printf "\n\n") >> ${curr_mr_gs_folder}/csv/overall_$filename-MR_$mr%-GS_${GS_ARRAY[gs_index]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv &
++
++                    curr_mr_folder=${RUN_PATH}/MR$mr
++                    (./tocsv ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_${GS_ARRAY[gs_index]}-GC_${GC_ARRAY[gc_index]}.out && printf "\n\n") >> ${curr_mr_folder}/csv/overall_$filename-MR_$mr%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv &
++
++                    curr_folder=${RUN_PATH}
++                    (./tocsv ${curr_mr_gs_gc_folder}/$filename-MR_$mr%-GS_${GS_ARRAY[gs_index]}-GC_${GC_ARRAY[gc_index]}.out && printf "\n\n") >> ${curr_folder}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv &
++
++                    wait            
++                done
++                end=$(date +%s%N)/1000000
++                printf "Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++                echo "[INFO] MR:$mr GS:${GS_ARRAY[gs_index]} -- General CSV Generation"
++                printf "\n"                  
++            done
++            end=$(date +%s%N)/1000000
++            printf "Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++            echo "[INFO] MR:$mr --DONE-- General CSV Generation"
++            printf "\n"
++        done
++        end=$(date +%s%N)/1000000
++
++        printf "Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++        echo "[INFO] $filename -- General CSV Generation"
++        printf "\n"
++
++done
++
++
++
++################################################################################################
++#########################################--CHART CSV--##########################################
++################################################################################################
++start=$(date +%s%N)/1000000
++printf "\n-------------------- Generating general chart.csv files --------------------\n\n"
++gcc ./findMinFitness.c -o findMinFitness -std=c99
++
++check_dir_csv
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++        RUN_PATH=${NEW_DIR}/$filename
++        mkdir -p ${RUN_PATH}/charts
++        CHART_PATH=${RUN_PATH}/charts
++
++        ./findMinFitness -T ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/db.csv &
++
++        ./findMinFitness -C ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_gc.csv &
++
++        ./findMinFitness -S ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_gs.csv &
++
++        ./findMinFitness -M ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart_mr.csv &
++
++        ./findMinFitness -G ${RUN_PATH}/csv/overall_$filename-MR_${MIN_MR}%-${MAX_MR}%-GS_${GS_ARRAY[0]}-${GS_ARRAY[GS_ARRAY_SIZE-1]}-GC_${GC_ARRAY[0]}k-${GC_ARRAY[GC_ARRAY_SIZE-1]}k.csv $filename > ${CHART_PATH}/chart.csv 
++
++        wait
++done
++end=$(date +%s%N)/1000000
++
++printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++echo "[INFO] $filename -- General Chart CSV Generation"
+diff --git a/ODIN_II/tocsv.c b/ODIN_II/tocsv.c
+new file mode 100644
+index 000000000..43632f5f7
+--- /dev/null
++++ b/ODIN_II/tocsv.c
+@@ -0,0 +1,115 @@
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++
++
++void miss_lines (int num, FILE *fp) {
++
++    char line[1024];
++
++    for (int i = 0; i < num; i++) 
++        fgets(line, sizeof(line), fp);
++}
++
++int main (int argc, char* argv[]) {
++
++    FILE *fp1 = NULL;
++    // FILE *fp2 = NULL;
++    char name[1024];
++    int generation_count=-1;
++    int generation_size=-1;
++    float mutation_rate=-1;
++    int generation_number=-1;
++    float current_fitness=-1;
++    int node_count=-1;
++    char* op;
++    int op_number=-1;
++    int RCA_number=-1;
++    int CSLA_number=-1;
++    int BE_CSLA_number=-1;
++    int critical_path=-1;
++    int max_fanin=-1;
++    int max_fanout=-1;
++
++    // input
++    // output
++    // size_t len = strlen(argv[1]);
++    // char fcsv[len];
++    // strncpy(fcsv, argv[1], len-3);
++    // fcsv[len-1] = 'v';
++    // fcsv[len-2] = 's';
++    // fcsv[len-3] = 'c';
++    // printf("---->-%s-\n", fcsv);
++
++    fp1 = fopen(argv[1], "r");
++    // fp2 = fopen(fcsv, "w");
++
++    if ( fp1 == NULL ) 
++        printf("file open error!\n");
++
++    // if ( fp2 == NULL ) 
++    //     printf("csv: file open error!\n");
++
++    //
++    miss_lines(15, fp1);
++    
++    fscanf(fp1, "%s %d\n", name, &generation_count);
++    fscanf(fp1, "%s %s %d\n", name, name, &generation_size);
++    fscanf(fp1, "%s %s %f\n", name, name, &mutation_rate);
++    
++    
++    //printf("mutation_rate,generation_size,generation_count\n");
++    printf("%.3f,%d,%d\n", mutation_rate, generation_size, generation_count);
++
++    // printf("generation_count: -%d-\n", generation_count);
++    // printf("generation_size: -%d-\n", generation_size);
++    // printf("mutation_rate: -%f-\n", mutation_rate);
++
++    miss_lines(3, fp1);
++
++    //printf("generation_number,fitness,critical_path,max_fanin,max_fanout,op_type,op_num,node_count,RCA,CSLA,BE_CSLA\n");
++    
++    for (int i = 0; i < generation_count; i++) {
++
++        fscanf(fp1, "%s %d\n", name, &generation_number);
++        // printf(">>generation_number: -%d-\n", generation_number);
++
++        for (int j = 0; j < generation_size; j++) {
++
++            fscanf(fp1, "%s %f\n", name, &current_fitness);
++            fscanf(fp1, "%s %d\n", name, &critical_path);
++            fscanf(fp1, "%s %d\n", name, &max_fanin);
++            fscanf(fp1, "%s %d\n", name, &max_fanout);
++            fscanf(fp1, "%s %d %d\n", op, &op_number, &node_count);
++            fscanf(fp1, "%s %s %d\n", name, name, &RCA_number);
++            fscanf(fp1, "%s %s %d\n", name, name, &CSLA_number);
++            fscanf(fp1, "%s %s %d\n", name, name, &BE_CSLA_number);
++            miss_lines(1, fp1);
++
++            if ( j == 0 ) {
++                printf("%d,%f,%d,%d,%d,%s,%d,%d,%d,%d,%d\n", 
++                    generation_number, current_fitness, critical_path, max_fanin, max_fanout, op, op_number, node_count, RCA_number, CSLA_number, BE_CSLA_number);
++            }
++
++            // if ( j == 0 )
++            //     printf("\tparent fitness: -%f-\n", current_fitness);
++            // else
++            //     printf("\tchild[%d] fitness: -%f-\n", j, current_fitness);
++
++            // printf("\tcritical_path: -%d-\n", critical_path);
++            // printf("\tmax_fanin: -%d-\n", max_fanin);
++            // printf("\tmax_fanout: -%d-\n", max_fanout);
++            // printf("\top type: -%s-\n", op);
++            // printf("\top_num: -%d-\n", op_number);
++            // printf("\tnode_count: -%d-\n", node_count);
++            // printf("\tRCA: -%d-\n", RCA_number);
++            // printf("\tCSLA: -%d-\n", CSLA_number);
++            // printf("\tBE_CSLA: -%d-\n\n", BE_CSLA_number);
++        }
++    }
++    
++    fclose(fp1);
++    // fclose(fp2);
++
++}
+diff --git a/ODIN_II/tocsv_script.sh b/ODIN_II/tocsv_script.sh
+new file mode 100755
+index 000000000..d1d09b6be
+--- /dev/null
++++ b/ODIN_II/tocsv_script.sh
+@@ -0,0 +1,81 @@
++#!/bin/bash
++# Run GA script
++
++
++################################################
++##################--GLOBALS--###################
++################################################
++footprint=2
++DEFAULT_MR=50
++DEFAULT_GS=6
++DEFAULT_GC=1000
++
++################################################
++
++TESTS_PATH="./regression_test/benchmark/verilog/ga"
++GA_OUTPUTS_DIR="./ga_outputs"
++NEW_DIR=""
++RUN_PATH=""
++
++
++################################################
++################--FUNCTIONS--###################
++################################################
++# Init Directories and cleanup
++function check_dir () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $(($counter-1)))
++ }
++
++
++
++################################################
++##################--MAIN--######################
++################################################
++#make debug
++gcc ./tocsv.c -o tocsv -std=c99
++
++check_dir
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++        RUN_PATH=${NEW_DIR}/$filename
++        OCSV_PATH=${NEW_DIR}/overall_csv/$filename
++        
++        generation_size=$DEFAULT_GS
++        generation_count=$DEFAULT_GC
++        for ((mr=5; mr<=100; mr=mr+5))
++        do
++            (./tocsv ${RUN_PATH}/mutation_rate_changing/$filename-MR_$mr%-GS_$generation_size-GC_$generation_count.out && printf "\n\n") >> ${OCSV_PATH}/overall_$filename-MR_5%-100%-GS_$generation_size-GC_$generation_count.csv
++
++        done
++        
++        ##########################################################
++        mutation_rate=$DEFAULT_MR
++        generation_count=$DEFAULT_GC
++        for ((gs=1; gs<=20; gs++))
++        do
++            (./tocsv ${RUN_PATH}/generation_size_changing/$filename-MR_$mutation_rate%-GS_$gs-GC_$generation_count.out && printf "\n\n") >> ${OCSV_PATH}/overall_$filename-MR_$mutation_rate%-GS_1-20-GC_$generation_count.csv
++        done
++
++        ##########################################################
++        # fix mutation rate and generation size! increase the generation count by 1000 till 100K
++        mutation_rate=$DEFAULT_MR
++        generation_size=$DEFAULT_GS
++        for ((gc=1000; gc<=50000; gc=gc+500))
++        do
++            (./tocsv ${RUN_PATH}/generation_count_changing/$filename-MR_$mutation_rate%-GS_$generation_size-GC_$gc.out && printf "\n\n") >> ${OCSV_PATH}/overall_$filename-MR_$mutation_rate%-GS_$generation_size-GC_1k-50k.csv
++        done
++
++done
+\ No newline at end of file
+diff --git a/ODIN_II/tocsv_script2.sh b/ODIN_II/tocsv_script2.sh
+new file mode 100755
+index 000000000..ed52f78d4
+--- /dev/null
++++ b/ODIN_II/tocsv_script2.sh
+@@ -0,0 +1,64 @@
++#!/bin/bash
++
++TESTS_PATH="./regression_test/benchmark/verilog/ga"
++GA_OUTPUTS_DIR="./ga_outputs"
++NEW_DIR=""
++RUN_PATH=""
++
++
++MIN_MR=10
++MIN_GS=5
++MIN_GC=1000
++
++MAX_MR=100
++MAX_GS=20
++MAX_GC=20000
++
++RATE_MR=10
++RATE_GS=1
++RATE_GC=500
++
++
++# Init Directories and cleanup
++ function check_dir_csv () {
++	declare -i counter=0;
++	while true; 
++	do
++                if [ -d "${GA_OUTPUTS_DIR}/$(printf "%03d" $counter)"  ]
++                then
++                        counter=$counter+1;
++                else
++                        break;
++                fi
++	done
++	NEW_DIR=${GA_OUTPUTS_DIR}/$(printf "%03d" $(($counter-1)))
++ }
++
++start=$(date +%s%N)/1000000
++printf "\n-------------------- Generating general chart.csv files --------------------\n\n"
++gcc ./findTopFitnesses.c -o findTopFitnesses -std=c99
++
++check_dir_csv
++
++for file in ${TESTS_PATH}/*.v;
++do
++        no_path=${file##*/}
++        filename=${no_path%.*}
++        RUN_PATH=${NEW_DIR}/$filename
++        mkdir -p ${RUN_PATH}/charts
++        CHART_PATH=${RUN_PATH}/charts
++
++        ./findTopFitnesses -C ${RUN_PATH}/csv/overall_$filename-MR_5%-100%-GS_1-20-GC_1k-50k.csv > ${CHART_PATH}/chart_gc.csv &
++
++        ./findTopFitnesses -S ${RUN_PATH}/csv/overall_$filename-MR_5%-100%-GS_1-20-GC_1k-50k.csv > ${CHART_PATH}/chart_gs.csv &
++
++        ./findTopFitnesses -M ${RUN_PATH}/csv/overall_$filename-MR_5%-100%-GS_1-20-GC_1k-50k.csv > ${CHART_PATH}/chart_mr.csv &
++
++        ./findTopFitnesses -G ${RUN_PATH}/csv/overall_$filename-MR_5%-100%-GS_1-20-GC_1k-50k.csv > ${CHART_PATH}/chart.csv 
++
++        wait
++done
++end=$(date +%s%N)/1000000
++
++printf "[INFO] Execution time: %.3f s\n" $(bc <<<"scale=4;$[end-start]/1000")
++echo "[INFO] $filename -- General Chart CSV Generation"
