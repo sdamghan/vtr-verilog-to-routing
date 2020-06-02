@@ -166,7 +166,11 @@ static ODIN_ERROR_CODE synthesize_verilog() {
         /* point where we convert netlist to FPGA or other hardware target compatible format */
         printf("Performing Partial Map to target device\n");
         partial_map_top(verilog_netlist);
-        GA_partial_map_top(verilog_netlist);
+        if (global_args.ga_partial_map.provenance() == argparse::Provenance::SPECIFIED){
+
+            printf("[INFO] Genetic Algorithm for adders is acticvated\n");
+            GA_partial_map_top(verilog_netlist);
+        }
 
         /* Find any unused logic in the netlist and remove it */
         remove_unused_logic(verilog_netlist);

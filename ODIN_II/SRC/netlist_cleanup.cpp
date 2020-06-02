@@ -168,7 +168,8 @@ void remove_unused_nodes(node_list_t* remove) {
         int i;
         for (i = 0; i < remove->node->num_input_pins; i++) {
             npin_t* input_pin = remove->node->input_pins[i];
-            input_pin->net->fanout_pins[input_pin->pin_net_idx] = NULL; // Remove the fanout pin from the net
+            if (input_pin) 
+                input_pin->net->fanout_pins[input_pin->pin_net_idx] = NULL; // Remove the fanout pin from the net
         }
         remove->node->node_data = VISITED_REMOVAL;
         remove = remove->next;
