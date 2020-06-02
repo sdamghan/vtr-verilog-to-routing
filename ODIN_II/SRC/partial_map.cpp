@@ -42,6 +42,9 @@
 #include "vtr_memory.h"
 #include "vtr_util.h"
 
+#include "registered_ga_items.h"
+
+
 void depth_first_traversal_to_partial_map(short marker_value, netlist_t* netlist);
 void depth_first_traverse_partial_map(nnode_t* node, uintptr_t traverse_mark_number, netlist_t* netlist);
 
@@ -170,7 +173,8 @@ void partial_map_node(nnode_t* node, short traverse_number, netlist_t* netlist) 
                 // Check if the size of this adder is greater than the hard vs soft logic threshold
                 instantiate_hard_adder(node, traverse_number, netlist);
             } else {
-                instantiate_add_w_carry(RCA, node, traverse_number, netlist);
+                // instantiate_add_w_carry(RCA, node, traverse_number, netlist);
+                add_to_ga(node);
             }
             break;
         case MINUS:

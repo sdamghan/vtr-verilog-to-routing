@@ -91,13 +91,13 @@ void GA_partial_map_top_item(operation_list op, netlist_t* netlist) {
 
         for (int i = 0; i < ga_op[op]->size; i += 1) {
             reattach_connection(ga_op[op]->connectivity[mapping[i]][i]);
-            //free_connection(ga_op[op]->connectivity[mapping[i]][i]);
-            //ga_op[op]->connectivity[mapping[i]][i] = NULL;
+            free_connection(ga_op[op]->connectivity[mapping[i]][i]);
+            ga_op[op]->connectivity[mapping[i]][i] = NULL;
         }
 
-        //vtr::free(mapping);
-        //free_ga_t(ga_op[op]);
-        //ga_op[op] = NULL;
+        vtr::free(mapping);
+        free_ga_t(ga_op[op]);
+        ga_op[op] = NULL;
         traversal_id += 1;
     }
 }
