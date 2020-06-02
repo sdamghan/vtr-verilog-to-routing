@@ -16,6 +16,7 @@ FILE* open_file(const char* file_name, const char* open_type);
 
 const char* name_based_on_op(operation_list op);
 const char* name_based_on_ids(ids op);
+const char* name_based_on_type(adder_type_e type);
 const char* node_name_based_on_op(nnode_t* node);
 const char* ast_node_name_based_on_ids(ast_node_t* node);
 

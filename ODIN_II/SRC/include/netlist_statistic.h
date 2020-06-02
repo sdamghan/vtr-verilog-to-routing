@@ -11,6 +11,9 @@ stat_t* get_stats(nnet_t* net, netlist_t* netlist, uintptr_t traverse_mark_numbe
 
 stat_t* delete_stat(stat_t* stat);
 
+void init(metric_t* m);
+void add_into(metric_t* dest, metric_t* src);
+double fitness_calc (netlist_t* netlist, metric_t* m);
 void init_stat(netlist_t* netlist);
 void compute_statistics(netlist_t* netlist, bool display);
 

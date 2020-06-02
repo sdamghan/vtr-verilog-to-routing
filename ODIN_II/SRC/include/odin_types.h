@@ -56,6 +56,7 @@
 #define ODIN_STD_BITWIDTH (sizeof(long) * 8)
 
 /* unique numbers to mark the nodes as we DFS traverse the netlist */
+#define PARTIAL_MAP_TRAVERSE_VALUE_GA_ADDERS 11
 #define PARTIAL_MAP_TRAVERSE_VALUE 10
 #define OUTPUT_TRAVERSE_VALUE 12
 #define COUNT_NODES 14 /* NOTE that you can't call countnodes one after the other or the mark will be incorrect */
@@ -100,6 +101,10 @@ struct global_args_t {
     argparse::ArgValue<bool> show_help;
 
     argparse::ArgValue<std::string> adder_def; //DEPRECATED
+      argparse::ArgValue<double> ga_partial_map;   // enable ga_partial_map
+        argparse::ArgValue<double> ga_partial_map_mr;
+        argparse::ArgValue<double> ga_partial_map_gs;
+        argparse::ArgValue<double> ga_partial_map_gc;
 
     // defines if the first cin of an adder/subtractor is connected to a global gnd/vdd
     // or generated using a dummy adder with both inputs set to gnd/vdd
@@ -330,6 +335,24 @@ enum ids {
     // EDDIE: new enum value for ids to replace MEMORY from operation_t
     RAM,
     ids_END
+};
+
+enum adder_type_e {
+    RCA,     // default, ripple carry adder
+    CSLA,    // carry select adder
+    BE_CSLA, // binary excess carry select adder
+    adder_type_END
+};
+
+enum direction_e {
+    UPWARD,
+    DOWNWARD,
+};
+
+enum branching_type_e {
+    FANIN,
+    FANOUT,
+    branching_type_END
 };
 
 struct metric_t {
@@ -597,6 +620,11 @@ struct netlist_t {
     metric_t output_node_stat;
 
     t_logical_block_type_ptr type;
+
+        /****************************
+     * statistic of the circuit
+     */
+    long long total_net_count;
 };
 
 #endif

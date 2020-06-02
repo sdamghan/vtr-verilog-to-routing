@@ -62,6 +62,9 @@
 #include "vtr_path.h"
 #include "vtr_memory.h"
 
+#include "registered_ga_items.h"
+
+
 #define DEFAULT_OUTPUT "."
 
 int current_parse_file = -1;
@@ -164,6 +167,7 @@ static ODIN_ERROR_CODE synthesize_verilog() {
         /* point where we convert netlist to FPGA or other hardware target compatible format */
         printf("Performing Partial Map to target device\n");
         partial_map_top(verilog_netlist);
+        // GA_partial_map_top(verilog_netlist);
 
         /* Find any unused logic in the netlist and remove it */
         remove_unused_logic(verilog_netlist);
@@ -425,6 +429,33 @@ void get_options(int argc, char** argv) {
         .default_value("false")
         .action(argparse::Action::STORE_TRUE);
 
+    ////mehrshad
+    other_grp.add_argument(global_args.ga_partial_map, "--GA")
+        .help("Activate Genetic Algorithm during partial mapping")
+        .default_value("2.0")
+        .metavar("FOOTPRINT_RATIO");
+
+        other_grp.add_argument(global_args.ga_partial_map_mr, "--GA-MR")
+        .help("SET MUTATION RATE PERCENTAGE")
+        .default_value("50")
+        .metavar("MUTATION_RATE");
+
+        other_grp.add_argument(global_args.ga_partial_map_gs, "--GA-GS")
+        .help("SET GENERATION SIZE")
+        .default_value("6")
+        .metavar("GENERATION_SIZE");
+
+        other_grp.add_argument(global_args.ga_partial_map_gc, "--GA-GC")
+        .help("SET GENERATION COUNT")
+        .default_value("32")
+        .metavar("GENERATION_COUNT");
+
+    other_grp.add_argument(global_args.sim_random_seed, "-r")
+        .help("Random seed")
+        .default_value("0")
+        .metavar("SEED");
+    ////mehrshad
+
     other_grp.add_argument(global_args.write_ast_as_dot, "-A")
         .help("Output AST graph in graphviz .dot format")
         .default_value("false")
@@ -619,6 +650,12 @@ void set_default_config() {
     configuration.output_type = std::string("blif");
     configuration.output_ast_graphs = 0;
     configuration.output_netlist_graphs = 0;
+    configuration.mutation_rate = 0.5;
+    configuration.generation_size = 6;
+    configuration.generation_count = 32;
+    // by default we target twice as wide then deep
+    //
+    configuration.ga_partial_map = 2.0;
     configuration.print_parse_tokens = 0;
     configuration.output_preproc_source = 0; // TODO: unused
     configuration.debug_output_path = std::string(DEFAULT_OUTPUT);

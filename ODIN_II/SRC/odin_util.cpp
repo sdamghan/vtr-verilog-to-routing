@@ -39,6 +39,7 @@
 #include "vtr_memory.h"
 #include <regex>
 #include <stdbool.h>
+#include "enum_str.cpp"
 
 // for mkdir
 #ifdef WIN32
@@ -117,6 +118,12 @@ const char* name_based_on_op(operation_list op) {
     oassert(op < operation_list_END && "OUT OF BOUND operation_list!");
 
     return operation_list_STR[op][ODIN_STRING_TYPE];
+}
+
+const char* name_based_on_type(adder_type_e type) {
+    oassert(type < adder_type_END && "OUT OF BOUND adder_type_e!");
+
+    return adder_type_STR[type];
 }
 
 /*---------------------------------------------------------------------------------------------

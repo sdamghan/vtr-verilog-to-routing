@@ -13,12 +13,13 @@
 #include "vtr_memory.h"
 
 #define UNUSED_NODE_TYPE -1
-static void init(metric_t* m);
+// static void init(metric_t* m);
 static void print_stats(metric_t* m);
 static void copy(metric_t* dest, metric_t* src);
 
 static void add_to_stat(metric_t* dest, long long branching_factor);
 static void count_node_type(nnode_t* node, netlist_t* netlist);
+
 
 static metric_t* get_upward_stat(nnet_t* net, netlist_t* netlist, uintptr_t traverse_mark_number);
 static metric_t* get_downward_stat(nnet_t* net, netlist_t* netlist, uintptr_t traverse_mark_number);
@@ -32,7 +33,7 @@ static metric_t* get_upward_stat(metric_t* destination, nnode_t** node_list, lon
 static metric_t* get_downward_stat(metric_t* destination, nnet_t** net_list, long long net_count, netlist_t* netlist, uintptr_t traverse_mark_number);
 static metric_t* get_upward_stat(metric_t* destination, nnet_t** net_list, long long net_count, netlist_t* netlist, uintptr_t traverse_mark_number);
 
-static void init(metric_t* m) {
+void init(metric_t* m) {
     m->min_depth = 0;
     m->max_depth = 0;
     m->avg_depth = 0;
@@ -67,6 +68,31 @@ void init_stat(netlist_t* netlist) {
     init(&netlist->output_node_stat);
     netlist->num_of_node = 0;
     netlist->num_logic_element = 0;
+}
+
+
+void add_into(metric_t* dest, metric_t* src) {
+    dest->min_depth += src->min_depth;
+    dest->max_depth += src->max_depth;
+    dest->avg_depth += src->avg_depth;
+    dest->avg_width += src->avg_width;
+}
+
+inline double circuit_area(metric_t* v) {
+    return (v->avg_width * v->avg_depth);
+}
+
+double fitness_calc (netlist_t* netlist, metric_t* m) {
+    long long node_count = netlist->total_net_count;
+    double area = circuit_area(m);
+
+    double area_efectness = (m->max_depth) / (area*node_count);
+    // double fan_effectness = (m->max_fanin)+(m->max_fanout);
+    // printf("\n\n \t++node_count: %lld\n\t++area: %f\n\t++max_depth: %f\n\t++max_fan-in: %d\n\t++max_fan-out: %d\n\t++area_effectness: %f\n\t++fan_effectness: %f\n\n", 
+    //       node_count, area, m->max_depth, m->max_fanin, m->max_fanout, area_efectness, fan_effectness);
+
+
+    return 1000000000 * (area_efectness);
 }
 
 static void print_stats(metric_t* m) {
@@ -129,9 +155,10 @@ static bool traverse(nnode_t* node, uintptr_t traverse_mark_number) {
     return traverse;
 }
 
-static bool traverse(nnet_t* net, uintptr_t traverse_mark_number) {
+static bool traverse(nnet_t* net, uintptr_t traverse_mark_number, netlist_t* netlist) {
     bool traverse = (net->traverse_visited != traverse_mark_number);
     net->traverse_visited = traverse_mark_number;
+    netlist->total_net_count += 1;
     return traverse;
 }
 
@@ -210,7 +237,7 @@ static metric_t* get_upward_stat(nnet_t* net, netlist_t* netlist, uintptr_t trav
     if (net) {
         destination = &(net->stat.upward);
 
-        if (traverse(net, traverse_mark_number)) {
+        if (traverse(net, traverse_mark_number, netlist)) {
             init(destination);
 
             if (net->driver_pin) {
@@ -254,7 +281,7 @@ static metric_t* get_downward_stat(nnet_t* net, netlist_t* netlist, uintptr_t tr
     if (net) {
         destination = &(net->stat.downward);
 
-        if (traverse(net, traverse_mark_number)) {
+        if (traverse(net, traverse_mark_number, netlist)) {
             init(destination);
             if (net->num_fanout_pins) {
                 metric_t** child_stat = (metric_t**)vtr::calloc(net->num_fanout_pins, sizeof(metric_t*));
