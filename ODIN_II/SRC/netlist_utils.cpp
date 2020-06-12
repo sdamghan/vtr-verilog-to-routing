@@ -628,6 +628,7 @@ void add_fanout_pin_to_net(nnet_t* net, npin_t* pin) {
     pin->net = net;
     pin->pin_net_idx = net->num_fanout_pins - 1;
     pin->type = INPUT;
+    // pin->name = append_string("", "%s__idx:%d", net->name, net->num_fanout_pins - 1);
 }
 
 /*---------------------------------------------------------------------------------------------
@@ -764,6 +765,7 @@ void connect_nodes(nnode_t* out_node, int out_idx, nnode_t* in_node, int in_idx)
 
     /* create the pin that hooks up to the input */
     add_input_pin_to_node(in_node, new_in_pin, in_idx);
+    // new_in_pin->name = vtr::strdup(out_node->name);
 
     if (out_node->output_pins[out_idx] == NULL) {
         /* IF - this node has no output net or pin */
@@ -778,6 +780,8 @@ void connect_nodes(nnode_t* out_node, int out_idx, nnode_t* in_node, int in_idx)
         add_fanout_pin_to_net(new_net, new_in_pin);
         /* hook up the new pin 2 to this new net */
         add_driver_pin_to_net(new_net, new_out_pin);
+        // new_out_pin->name = append_string("", "%s__idx:%d", out_node->name, out_idx);
+
     } else {
         /* ELSE - there is a net so we just add a fanout */
         /* hook up in pin out of the new net */

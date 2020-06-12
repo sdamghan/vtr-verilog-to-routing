@@ -58,17 +58,17 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
             for (int i = 0; i < configuration.generation_count; i += 1) {
                 best_mutation = best_generation;
 
-                printf(">Generation_number %d\n", i);
-                printf("parent_fitness %f\n", best_fit);
-                print_type_stat(&current_values, list, best_mutation, netlist);
+                //printf(">Generation_number %d\n", i);
+                //printf("parent_fitness %f\n", best_fit);
+                //print_type_stat(&current_values, list, best_mutation, netlist);
 
                 for (int j = 1; j < configuration.generation_size; j += 1) {
                     ga_type_e* mutation = new_mutation(best_generation, list->size, list->type_length);
                     double current_fit = partial_map_ga_item(list, mutation, netlist, traverse_number, &current_values );
 
-                    printf("current_fitness %lf\n", current_fit);
+                    //printf("current_fitness %lf\n", current_fit);
 
-                    print_type_stat(&current_values, list, mutation, netlist);
+                    //print_type_stat(&current_values, list, mutation, netlist);
 
                     if (current_fit < best_fit) {
                         if (best_mutation != best_generation) {
@@ -193,6 +193,8 @@ connection_t* new_connection(nnode_t* parent) {
         }
     }
 
+    connection->node = parent;
+
     return connection;
 }
 
@@ -221,6 +223,8 @@ void free_connection_subtree(connection_t* to_delete) {
 
 void free_connection(connection_t* to_delete) {
     if (to_delete) {
+        free_nnode(to_delete->node);
+        to_delete->node = NULL;
         free_signal_list(to_delete->input);
         to_delete->input = NULL;
         free_signal_list(to_delete->output);

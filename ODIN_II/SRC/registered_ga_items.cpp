@@ -37,6 +37,13 @@ void GA_partial_map_top(netlist_t* netlist) {
      * 
      * */
 
+    // printf("\n\n------>%d<-\n\n", ga_op[ADD]->size);
+
+    // for (size_t i = 0; i < ga_op[ADD]->size; i++)
+    // {
+    //     printf("\n\n->%s<-\n\n", ga_op[ADD]->node[i]->name);
+    // }
+
     GA_partial_map_top_item(ADD, netlist);
 }
 

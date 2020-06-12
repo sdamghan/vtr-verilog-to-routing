@@ -675,7 +675,7 @@ void split_adder(nnode_t* nodeo, int a, int b, int sizea, int sizeb, int cin, in
     // don't add a dummy adder in the beginning of the chain if the first cin will be connected to a global gnd
     if ((flag == 0 || count > 1) && !configuration.adder_cin_global) {
         //connect the a[0] and b[0] of first adder node to ground
-        connect_nodes(netlist->gnd_node, 0, node[0], 0);
+        connect_nodes(netlist->vcc_node, 0, node[0], 0);
         connect_nodes(netlist->gnd_node, 0, node[0], sizea);
         //hang the first sumout
         node[0]->output_pins[1] = allocate_npin();
@@ -1296,22 +1296,17 @@ static nnode_t* make_adder(operation_list funct, nnode_t* current_adder, nnode_t
  * create a single adder block using adder_type_definition file input to select blk size and type
  *-------------------------------------------------------------------------------------------*/
 void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node, short mark, netlist_t* netlist, short subtraction) {
-    //set the default
-    int blk_size = width[0];
-    nnode_t* initial_carry = (subtraction) ? netlist->vcc_node : netlist->gnd_node;
+    
+    nnode_t* previous_carry = (subtraction) ? netlist->vcc_node : netlist->gnd_node;
+    nnode_t* previous_carry_gnd = netlist->gnd_node;
+    nnode_t* previous_carry_vcc = netlist->vcc_node;
 
-    for (int start_pin = 0, current_counter = 1; start_pin < width[0]; start_pin += blk_size, current_counter++) {
-        blk_size = width[0] - start_pin;
-        nnode_t* previous_carry = initial_carry;
-        nnode_t* previous_carry_gnd = netlist->gnd_node;
-        nnode_t* previous_carry_vcc = netlist->vcc_node;
+    for (int i = 0; i < width[0]; i++) {
+        /* set of flags for building purposes */
+        short construct_last_carry_flag = (i != width[0] - 1 || !subtraction) ? 1 : 0;
+        short last_pin_on_blk_flag = (i == width[0] - 1) ? 1 : 0;
 
-        for (int i = start_pin; i < start_pin + blk_size; i++) {
-            /* set of flags for building purposes */
-            short construct_last_carry_flag = (i != width[0] - 1 || !subtraction) ? 1 : 0;
-            short last_pin_on_blk_flag = (i == start_pin + blk_size - 1) ? 1 : 0;
-
-            switch (type) {
+         switch (type) {
                 // Ripple Carry Adder
                 case RCA: {
                     //build adder
@@ -1324,16 +1319,18 @@ void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node,
                 }
                 //Carry Select Adder
                 case CSLA: {
+
+                    // Carry-in gnd
                     nnode_t* current_adder_gnd = make_adder(ADDER_FUNC, NULL, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
                     if (construct_last_carry_flag)
                         previous_carry_gnd = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
 
+                    // Carry-in vcc
                     nnode_t* current_adder_vcc = make_adder(ADDER_FUNC, current_adder_gnd, previous_carry_vcc, width, i, netlist, node, subtraction, mark);
                     if (construct_last_carry_flag)
                         previous_carry_vcc = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_vcc, width, i, netlist, node, subtraction, mark);
 
                     nnode_t* current_adder = make_mux_2to1(previous_carry, current_adder_vcc, current_adder_gnd, node, mark);
-
                     if (last_pin_on_blk_flag && construct_last_carry_flag)
                         previous_carry = make_mux_2to1(previous_carry, previous_carry_vcc, previous_carry_gnd, node, mark);
 
@@ -1341,7 +1338,7 @@ void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node,
                     break;
                 }
                 //binary to excess Carry Select Adder
-                case BE_CSLA: {
+                /*case BE_CSLA: {
                     nnode_t* current_adder_gnd = make_adder(ADDER_FUNC, NULL, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
                     if (construct_last_carry_flag)
                         previous_carry_gnd = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
@@ -1357,14 +1354,12 @@ void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node,
 
                     connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
                     break;
-                }
+                }*/
                 default: {
                     error_message(NETLIST_ERROR, -1, -1, "( %d )is not a valid type", type);
                     return;
                 }
-            }
         }
-        initial_carry = previous_carry;
     }
 }
 

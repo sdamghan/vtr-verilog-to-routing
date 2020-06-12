@@ -173,6 +173,7 @@ void partial_map_node(nnode_t* node, short traverse_number, netlist_t* netlist) 
                 instantiate_hard_adder(node, traverse_number, netlist);
             } else {
                 add_to_ga(node);
+                // instantiate_add_w_carry(RCA, node, traverse_number, netlist);
             }
             break;
 
