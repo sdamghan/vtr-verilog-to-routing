@@ -1246,8 +1246,10 @@ static nnode_t* make_adder(operation_list funct, nnode_t* current_adder, nnode_t
             npin_t* temp_pin = node->input_pins[current_pin];
             if (temp_pin->net->driver_pin == NULL || temp_pin->net->driver_pin->node->type == GND_NODE) {
                 connect_nodes(netlist->gnd_node, 0, new_funct, 0 + is_three_port_gate);
+                remove_fanout_pins_from_net(temp_pin->net, temp_pin, temp_pin->pin_net_idx);
             } else if (temp_pin->net->driver_pin->node->type == VCC_NODE) {
                 connect_nodes(netlist->vcc_node, 0, new_funct, 0 + is_three_port_gate);
+                remove_fanout_pins_from_net(temp_pin->net, temp_pin, temp_pin->pin_net_idx);
             } else {
                 remap_pin_to_new_node(temp_pin, new_funct, 0 + is_three_port_gate);
             }
@@ -1262,9 +1264,11 @@ static nnode_t* make_adder(operation_list funct, nnode_t* current_adder, nnode_t
             if (temp_pin->net->driver_pin == NULL || temp_pin->net->driver_pin->node->type == GND_NODE) {
                 nnode_t* attach_to = (subtraction) ? netlist->vcc_node : netlist->gnd_node;
                 connect_nodes(attach_to, 0, new_funct, 1 + is_three_port_gate);
+                remove_fanout_pins_from_net(temp_pin->net, temp_pin, temp_pin->pin_net_idx);
             } else if (temp_pin->net->driver_pin->node->type == VCC_NODE) {
                 nnode_t* attach_to = (subtraction) ? netlist->gnd_node : netlist->vcc_node;
                 connect_nodes(attach_to, 0, new_funct, 1 + is_three_port_gate);
+                remove_fanout_pins_from_net(temp_pin->net, temp_pin, temp_pin->pin_net_idx);
             } else {
                 if (subtraction) {
                     nnode_t* new_not_cells = make_not_gate(node, mark);
@@ -1334,7 +1338,7 @@ void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node,
                     break;
                 }
                 //binary to excess Carry Select Adder
-                /*case BE_CSLA: {
+                case BE_CSLA: {
                     nnode_t* current_adder_gnd = make_adder(ADDER_FUNC, NULL, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
                     if (construct_last_carry_flag)
                         previous_carry_gnd = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
@@ -1350,7 +1354,7 @@ void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node,
 
                     connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
                     break;
-                }*/
+                }
                 default: {
                     error_message(NETLIST_ERROR, -1, -1, "( %d )is not a valid type", type);
                     return;
