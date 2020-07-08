@@ -1,0 +1,29 @@
+mySQL:
+
+workbench access issue: ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password';
+
+
+
+
+
+
+
+
+
+
+- RUN ./ga_script3.sh for blob_merge.v
+	. for this pupose we need to tune GA variables in ga_script3.sh and findMinFitness
+	. since all acheived fitness are equal that shows us the value of lamda and gc are more important than their ratio. So we choose ratio 1/128 to do the rest of the experiment.
+
+- Now, since we fixed the ratio we can go through finding the most efficient mutation rate.
+	. For this purpose, we re-run the GA algorithm with different MRs but with combinations of  lamda and gc with fixed ratio, i.e.  
+	MR		=	5%-100% (+5%)
+	(GS,GC) 	=	(1,128), (2,256), (4,512), (8,1024), (16,2048), (32,4096), (64,8192), (128, 16384) 
+ 
+- find best MUTATION_RATE
+
+- RUN ./ga_script3.sh for all other benchmarks with fixed MUTATION_RATE achieved in last step
+
+- 
+
+...

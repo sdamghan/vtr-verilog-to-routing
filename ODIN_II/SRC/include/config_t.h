@@ -48,10 +48,11 @@ struct config_t {
     std::string arch_file; // Name of the FPGA architecture file
 
     // for ga
-    double ga_partial_map;            // enable genetic algorithm for adder configuration
+    bool ga_partial_map;            // enable genetic algorithm for adder configuration
     double mutation_rate;
     int generation_size;
     int generation_count;
+    int num_of_all_nodes;
 };
 
 extern config_t configuration;

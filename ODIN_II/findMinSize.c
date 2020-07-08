@@ -34,7 +34,7 @@ struct stats {
     int generation_count;
     int generation_number;
     float fitness;
-    int max_fanin;
+    int avg_dept;
     int max_fanout;
     int critical_path;
     char* op;
@@ -52,7 +52,7 @@ void init(struct stats* curr_stat){
     curr_stat->generation_count = -1;
     curr_stat->generation_number = -1;
     curr_stat->fitness = INT_MAX;
-    curr_stat->max_fanin = -1;
+    curr_stat->avg_dept = -1;
     curr_stat->max_fanout = -1;
     curr_stat->critical_path = INT_MAX;
     curr_stat->op = (char*)malloc (32*sizeof(char));
@@ -70,7 +70,7 @@ void copy_stat(struct stats* copy_stat, struct stats* paste_stat) {
     paste_stat->generation_count  = copy_stat->generation_count;
     paste_stat->generation_number = copy_stat->generation_number;
     paste_stat->fitness           = copy_stat->fitness;
-    paste_stat->max_fanin         = copy_stat->max_fanin;
+    paste_stat->avg_dept         = copy_stat->avg_dept;
     paste_stat->max_fanout        = copy_stat->max_fanout;
     paste_stat->critical_path     = copy_stat->critical_path;
     paste_stat->op                = copy_stat->op;
@@ -93,19 +93,19 @@ void scan_stat (struct stats* curr_stat) {
 
     fscanf(fp, "%d,%f,%d,%d,%d,ADD,%d,%d,%d,%d,%d", 
                 &curr_stat->generation_number, &curr_stat->fitness, &curr_stat->critical_path, 
-                &curr_stat->max_fanin, &curr_stat->max_fanout, /*curr_stat->op,*/ &curr_stat->op_number, 
+                &curr_stat->avg_dept, &curr_stat->max_fanout, /*curr_stat->op,*/ &curr_stat->op_number, 
                 &curr_stat->node_count, &curr_stat->RCA_number, &curr_stat->CSLA_number, &curr_stat->BE_CSLA_number);
 }
 
 void print_header () {
-    printf("%s\n", "benchmark,mutation_rate,generation_size,generation_count,generation_number,fitness,critical_path,max_fanin,max_fanout,ADD,op_number,node_count,RCA_number,CSLA_number,BE_CSLA_number");
+    printf("%s\n", "benchmark,mutation_rate,generation_size,generation_count,generation_number,fitness,critical_path,avg_dept,max_fanout,ADD,op_number,node_count,RCA_number,CSLA_number,BE_CSLA_number");
 }
 
 void print_stat (struct stats* temp) {
 
     printf("%s,%.3f,%d,%d,", filename,temp->mutation_rate, temp->generation_size, temp->generation_count);
     printf("%d,%f,%d,%d,%d,%s,%d,%d,%d,%d,%d\n", 
-            temp->generation_number, temp->fitness, temp->critical_path, temp->max_fanin,
+            temp->generation_number, temp->fitness, temp->critical_path, temp->avg_dept,
             temp->max_fanout, "ADD"/*first_min_stat->op*/, temp->op_number, temp->node_count,
             temp->RCA_number, temp->CSLA_number, temp->BE_CSLA_number);
 }

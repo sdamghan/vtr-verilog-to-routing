@@ -161,13 +161,13 @@ static ODIN_ERROR_CODE synthesize_verilog() {
 
     /* point where we convert netlist to FPGA or other hardware target compatible format */
     printf("Performing Partial Map to target device");
-    if (global_args.ga_partial_map.provenance() == argparse::Provenance::SPECIFIED) {
-        printf(" using Genetic Algorithm\n\titteration: %d\n\tgeneration size: %d\n\tmutation rate: %0.2lf\n",
-               configuration.generation_count,
-               configuration.generation_size,
-               configuration.mutation_rate);
-    }
-    printf("\n");
+    // if (global_args.ga_partial_map.provenance() == argparse::Provenance::SPECIFIED) {
+    //     printf(" using Genetic Algorithm\n\titteration: %d\n\tgeneration size: %d\n\tmutation rate: %0.2lf\n",
+    //            configuration.generation_count,
+    //            configuration.generation_size,
+    //            configuration.mutation_rate);
+    // }
+    // printf("\n");
 
     partial_map_top(verilog_netlist);
     GA_partial_map_top(verilog_netlist);
@@ -188,7 +188,7 @@ static ODIN_ERROR_CODE synthesize_verilog() {
     cleanup_parser();
 
     elaboration_time = wall_time() - elaboration_time;
-
+    printf("\n-------------------> num_of_all_nodes: %d\n\n", configuration.num_of_all_nodes);
     printf("Successful High-level synthesis by Odin\n\tBlif file available at %s\n\tRan in ", global_args.output_file.value().c_str());
     print_time(elaboration_time);
     printf("\n");
@@ -425,8 +425,9 @@ void get_options(int argc, char** argv) {
 
     other_grp.add_argument(global_args.ga_partial_map, "--GA")
         .help("Activate Genetic Algorithm during partial mapping")
-        .default_value("2.0")
-        .metavar("FOOTPRINT_RATIO");
+        .default_value("false")
+        .metavar("ENABLE_GA")
+        .action(argparse::Action::STORE_TRUE);;
 
         other_grp.add_argument(global_args.ga_partial_map_mr, "--GA-MR")
         .help("SET MUTATION RATE PERCENTAGE")
@@ -627,9 +628,10 @@ void set_default_config() {
     configuration.mutation_rate = 0.5;
     configuration.generation_size = 6;
     configuration.generation_count = 32;
+    configuration.num_of_all_nodes=0;
     // by default we target twice as wide then deep
     //
-    configuration.ga_partial_map = 2.0;
+    configuration.ga_partial_map = false;
     configuration.print_parse_tokens = 0;
     configuration.output_preproc_source = 0; // TODO: unused
     configuration.debug_output_path = std::string(DEFAULT_OUTPUT);

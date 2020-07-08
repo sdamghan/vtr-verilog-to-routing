@@ -74,7 +74,7 @@ sub xml_find_LUT_Kvalue;
 sub xml_find_mem_size;
 sub exe_for_platform;
 
-my $temp_dir = "./temp";
+my $temp_dir = "/home/casauser/Desktop/ABC-outputs/RCA/stereovision1/";
 my $diff_exec = "diff";
 
 my $stage_idx_odin   = 1;
@@ -398,6 +398,9 @@ $mem_size = xml_find_mem_size($xml_tree);
 my $odin_output_file_name = "$benchmark_name" . file_ext_for_stage($stage_idx_odin, $circuit_suffix);
 my $odin_output_file_path = "$temp_dir$odin_output_file_name";
 
+# my $odin_output_file_name = "/home/casauser/Desktop/ABC-outputs/GA/blob_merge/blif.out";
+# my $odin_output_file_path = $odin_output_file_name;
+
 #The raw unprocessed ABC output
 my $abc_raw_output_file_name = "$benchmark_name" . ".raw" . file_ext_for_stage($stage_idx_abc, $circuit_suffix);
 my $abc_raw_output_file_path = "$temp_dir$abc_raw_output_file_name";
@@ -465,11 +468,20 @@ if ( $starting_stage <= $stage_idx_odin and !$error_code ) {
 
 	if ( !$error_code ) {
 		if ( $use_odin_xml_config ) {
-			$q = &system_with_timeout( "$odin2_path", "odin.out", $timeout, $temp_dir,
-				"-c", $odin_config_file_name,
+			
+				$q = &system_with_timeout( "$odin2_path", "odin.out", $timeout, $temp_dir,
 				"--adder_type", $odin_adder_config_path,
-                $odin_adder_cin_global,
-				"-U0");
+				"-a", "/home/casauser/Desktop/ABC-outputs/arch/k6_N10_40nm.xml",
+				"-V", "/home/casauser/Desktop/ABC-outputs/benchmarks/stereovision1.v",
+				# "-o", "/home/casauser/Desktop/ABC-outputs/GA/blob_merge/blif.out",
+				# "-a", $temp_dir . $architecture_file_name,
+				# "-V", $temp_dir . $circuit_file_name,
+				"-o", $temp_dir . $odin_output_file_name
+				#"--GA", "",
+				#"--GA-MR", 70,
+				#"--GA-GS", 8,
+				#"--GA-GC", 1024
+                );
 		} else {
 			$q = &system_with_timeout( "$odin2_path", "odin.out", $timeout, $temp_dir,
 				"--adder_type", $odin_adder_config_path,

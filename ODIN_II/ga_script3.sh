@@ -10,14 +10,17 @@ DEFAULT_MR=50
 DEFAULT_GS=6
 DEFAULT_GC=1000
 
-MIN_MR=60
-MAX_MR=60
+MIN_MR=70
+MAX_MR=70
 RATE_MR=5
 
-GS_ARRAY=(2 4 8 16 32 64)
-GS_ARRAY_SIZE=6
-GC_ARRAY=(256 512 1024 2048 4096 8192 16384 32768)
-GC_ARRAY_SIZE=8
+GS_ARRAY=(64)
+# 2 4 8 16 32 64)
+GS_ARRAY_SIZE=1
+GC_ARRAY=(8192)
+# 8 16 32 64 128 256 512)
+#  1024 2048 4096 8192)
+GC_ARRAY_SIZE=1
 
 WIDE_PATH="==========================================="
 
@@ -174,7 +177,7 @@ do
                         echo "$filename MR:$mr GS:${GS_ARRAY[gs_index]} -- Generation Count Changing:"
                         ls ${curr_mr_gs_gc_folder}/
                         printf "\n\n"
-                # wait   
+                wait   
                 done
                 end=$(date +%s%N)/1000000
 
@@ -192,7 +195,7 @@ do
         printf "\n"
 done
 
-wait
+# wait
 ################################################################################################
 ############################################--CSV--#############################################
 ################################################################################################

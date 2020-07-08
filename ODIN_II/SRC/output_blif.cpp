@@ -223,6 +223,7 @@ void depth_traverse_output_blif(nnode_t* node, int traverse_mark_number, FILE* f
 
         /* POST traverse  map the node since you might delete */
         output_node(node, traverse_mark_number, fp);
+        configuration.num_of_all_nodes++;
 
         /* mark that we have visitied this node now */
         node->traverse_visited = traverse_mark_number;

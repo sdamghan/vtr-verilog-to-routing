@@ -105,7 +105,7 @@ struct global_args_t {
     argparse::ArgValue<bool> show_help;
 
     argparse::ArgValue<std::string> adder_def; // DEPRECATED
-    argparse::ArgValue<double> ga_partial_map;   // enable ga_partial_map
+    argparse::ArgValue<bool> ga_partial_map;   // enable ga_partial_map
         argparse::ArgValue<double> ga_partial_map_mr;
         argparse::ArgValue<double> ga_partial_map_gs;
         argparse::ArgValue<double> ga_partial_map_gc;
@@ -343,8 +343,8 @@ enum ids {
 
 enum adder_type_e {
     RCA,     // default, ripple carry adder
-    CSLA,    // carry select adder
-    BE_CSLA, // binary excess carry select adder
+    //CSLA,    // carry select adder
+    //BE_CSLA, // binary excess carry select adder
     adder_type_END
 };
 

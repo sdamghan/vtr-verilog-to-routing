@@ -34,7 +34,7 @@ void init(metric_t* m) {
 }
 
 void print_stats(metric_t* m) {
-    printf("\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %d\n\t%s: %d\n\t%s: %d\n\t%s: %d\n",
+    printf("\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %0.4lf\n\t%s: %d\n\t%s: %d\n\t%s: %d\n\t%s: %d\n\n",
            "minimal depth", m->min_depth,
            "maximum depth", m->max_depth,
            "average depth", m->avg_depth,
@@ -87,7 +87,7 @@ inline double circuit_ratio(metric_t* v) {
 }
 
 inline double circuit_effective_ratio(metric_t* v) {
-    return (circuit_ratio(v) - configuration.ga_partial_map);
+    return (circuit_ratio(v));
 }
 
 inline double circuit_area(metric_t* v) {
@@ -407,14 +407,22 @@ void compute_statistics(netlist_t* netlist, int traverse_mark_number) {
         // reinit the node count
         netlist->total_net_count = 0;
 
+        bool flag = false;
+        metric_t* MAX = NULL;
         for (int i = 0; i < netlist->num_top_output_nodes; i++) {
+             
             if (netlist->top_output_nodes[i] != NULL) {
                 metric_t* current = get_upward_stat(netlist->top_output_nodes[i], netlist, traverse_mark_number);
+                
                 if (current != NULL) {
-                    // printf("Stats for Primary Fanout: %s", netlist->top_output_nodes[i]->name);
-                    // print_stats(current);
+                    if (!flag) {MAX = current; flag=true;}
+                    if(current->max_depth > MAX->max_depth)
+                        // printf("Stats for Primary Fanout: %s", netlist->top_output_nodes[i]->name);
+                        MAX = current;
                 }
             }
         }
+
+        print_stats(MAX);
     }
 }

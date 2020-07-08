@@ -54,21 +54,22 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
         double best_fit = partial_map_ga_item(list, best_generation, netlist, traverse_number, &current_values );
         ga_type_e* best_mutation = best_generation;
 
-        if (global_args.ga_partial_map.provenance() == argparse::Provenance::SPECIFIED) {
+        if (global_args.ga_partial_map) {
+            printf("FUCKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK\n\n\n\n\n");
             for (int i = 0; i < configuration.generation_count; i += 1) {
                 best_mutation = best_generation;
 
-                //printf(">Generation_number %d\n", i);
-                //printf("parent_fitness %f\n", best_fit);
-                //print_type_stat(&current_values, list, best_mutation, netlist);
+                // printf(">Generation_number %d\n", i);
+                // printf("parent_fitness %f\n", best_fit);
+                // print_type_stat(&current_values, list, best_mutation, netlist);
 
                 for (int j = 1; j < configuration.generation_size; j += 1) {
                     ga_type_e* mutation = new_mutation(best_generation, list->size, list->type_length);
                     double current_fit = partial_map_ga_item(list, mutation, netlist, traverse_number, &current_values );
 
-                    //printf("current_fitness %lf\n", current_fit);
+                    // printf("current_fitness %lf\n", current_fit);
 
-                    //print_type_stat(&current_values, list, mutation, netlist);
+                    // print_type_stat(&current_values, list, mutation, netlist);
 
                     if (current_fit < best_fit) {
                         if (best_mutation != best_generation) {
@@ -91,7 +92,12 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
                 }
             }
         }
+
+    printf("current_fitness %lf\n", best_fit);
+    print_type_stat(&current_values, list, best_mutation, netlist);
+
     }
+
     return best_generation;
 }
 
@@ -366,8 +372,8 @@ void print_type_stat(metric_t *current_values, ga_t* list, ga_type_e* mapping, n
 
     long long net_count_after = netlist->total_net_count;
 
-    printf("max_depth: %d\nmax_fan-in: %d\nmax_fan-out: %d\n", 
-              (int)current_values->max_depth, current_values->max_fanin, current_values->max_fanout);
+    printf("avg_width: %d\navg_depth: %d\nmax_fan-out: %d\n", 
+              (int)current_values->avg_width, (int)current_values->avg_depth, current_values->max_fanout);
 
     printf("%-*s %-*lld %-*lld\n",
            fmt_len, op_name,
