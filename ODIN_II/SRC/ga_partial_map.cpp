@@ -55,7 +55,6 @@ ga_type_e* get_best_mapping_for(ga_t* list, netlist_t* netlist, short traverse_n
         ga_type_e* best_mutation = best_generation;
 
         if (global_args.ga_partial_map) {
-            printf("FUCKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK\n\n\n\n\n");
             for (int i = 0; i < configuration.generation_count; i += 1) {
                 best_mutation = best_generation;
 

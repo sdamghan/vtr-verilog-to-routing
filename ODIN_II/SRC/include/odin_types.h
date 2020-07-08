@@ -343,8 +343,8 @@ enum ids {
 
 enum adder_type_e {
     RCA,     // default, ripple carry adder
-    //CSLA,    // carry select adder
-    //BE_CSLA, // binary excess carry select adder
+    CSLA,    // carry select adder
+    BE_CSLA, // binary excess carry select adder
     adder_type_END
 };
 

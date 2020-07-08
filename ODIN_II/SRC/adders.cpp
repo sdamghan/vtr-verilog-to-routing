@@ -1312,27 +1312,9 @@ void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node,
 
                     connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
                     break;
-                    
-                    /* // Carry-in gnd
-                    nnode_t* current_adder_gnd = make_adder(ADDER_FUNC, NULL, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
-                    if (construct_last_carry_flag)
-                        previous_carry_gnd = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
-
-                    // Carry-in vcc
-                    nnode_t* current_adder_vcc = make_adder(ADDER_FUNC, current_adder_gnd, previous_carry_vcc, width, i, netlist, node, subtraction, mark);
-                    if (construct_last_carry_flag)
-                        previous_carry_vcc = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_vcc, width, i, netlist, node, subtraction, mark);
-
-                    nnode_t* current_adder = make_mux_2to1(previous_carry, current_adder_vcc, current_adder_gnd, node, mark);
-                    if (last_pin_on_blk_flag && construct_last_carry_flag)
-                        previous_carry = make_mux_2to1(previous_carry, previous_carry_vcc, previous_carry_gnd, node, mark);
-
-                    connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
-                    break; */
-
                 }
                 //Carry Select Adder
-                /* case CSLA: {
+                case CSLA: {
 
                     // Carry-in gnd
                     nnode_t* current_adder_gnd = make_adder(ADDER_FUNC, NULL, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
@@ -1350,9 +1332,9 @@ void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node,
 
                     connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
                     break;
-                } */
+                }
                 //binary to excess Carry Select Adder
-                /* case RCA: {
+                case BE_CSLA: {
                     nnode_t* current_adder_gnd = make_adder(ADDER_FUNC, NULL, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
                     if (construct_last_carry_flag)
                         previous_carry_gnd = make_adder(CARRY_FUNC, current_adder_gnd, previous_carry_gnd, width, i, netlist, node, subtraction, mark);
@@ -1368,7 +1350,7 @@ void instantiate_add_w_carry_block(adder_type_e type, int* width, nnode_t* node,
 
                     connect_output_pin_to_node(width, i, 0, node, current_adder, subtraction);
                     break;
-                } */
+                }
                 default: {
                     error_message(NETLIST_ERROR, -1, -1, "( %d )is not a valid type", type);
                     return;
