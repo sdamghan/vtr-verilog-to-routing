@@ -496,7 +496,8 @@ signal_list_t* netlist_expand_ast_of_module(ast_node_t** node_ref, char* instanc
                 break;
             }
             /* ---------------------- */
-            case ASSIGN:
+            case ASSIGN: //fallthrough
+            case DEASSIGN:
                 /* combinational path */
                 type_of_circuit = COMBINATIONAL;
                 circuit_edge = UNDEFINED_SENSITIVITY;
@@ -599,7 +600,8 @@ signal_list_t* netlist_expand_ast_of_module(ast_node_t** node_ref, char* instanc
                 free_signal_list(temp_list); // list is unused; discard
                 break;
             }
-            case ASSIGN:
+            case ASSIGN: //fallthrough
+            case DEASSIGN:
                 //oassert(node->num_children == 1);
                 /* attach the drivers to the driver nets */
                 for (i = 0; i < node->num_children; i++) {
@@ -3182,8 +3184,12 @@ void terminate_continuous_assignment(ast_node_t* node, signal_list_t* assignment
                 for (j = 0; j < node2->num_input_pins; j++) {
                     npin_t* original_pin = node2->input_pins[j];
                     if (original_pin->name && !strcmp(original_pin->name, pin->name)) {
-                        pin->mapping = original_pin->mapping;
-                        add_input_pin_to_node(node2, pin, j);
+                        if (node->type == ASSIGN) {
+                            pin->mapping = original_pin->mapping;
+                            add_input_pin_to_node(node2, pin, j);
+                        } else if (node->type == DEASSIGN) {
+                            remap_pin_to_new_node(original_pin, pad_node, pad_node->num_output_pins);
+                        }
                         break;
                     }
                 }

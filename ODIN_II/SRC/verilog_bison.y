@@ -203,7 +203,7 @@ int yylex(void);
 %type <node> list_of_module_parameters localparam_declaration
 %type <node> specify_block list_of_specify_items
 %type <node> c_function_expression_list c_function
-%type <node> initial_block list_of_blocking_assignment
+%type <node> initial_block list_of_blocking_assignment deassign_items
 %type <node> list_of_generate_block_items generate_item generate_block_item generate loop_generate_construct if_generate_construct 
 %type <node> case_generate_construct case_generate_item_list case_generate_items generate_block generate_localparam_declaration generate_defparam_declaration
 
@@ -527,8 +527,14 @@ integer_type_variable:
 	| vSYMBOL_ID '=' primary			{$$ = newIntegerTypeVarDeclare($1, NULL, NULL, NULL, NULL, $3, my_location);} 
 	;
 
+deassign_items:
+	primary									{$$ = $1;}
+	| '{' expression_list '}'				{$$ = $2;}
+	;
+
 procedural_continuous_assignment:
 	vASSIGN list_of_blocking_assignment ';'	{$$ = $2;}
+	| vDEASSIGN deassign_items ';'			{$$ = $2;}
 	;
 
 list_of_blocking_assignment:
@@ -965,6 +971,7 @@ int ieee_filter(int ieee_version, int return_type) {
 		case vALWAYS:	//fallthrough
 		case vAND:	//fallthrough
 		case vASSIGN:	//fallthrough
+		case vDEASSIGN:	//fallthrough
 		case vBEGIN:	//fallthrough
 		case vBUF:	//fallthrough
 		case vBUFIF0:	//fallthrough
@@ -973,7 +980,6 @@ int ieee_filter(int ieee_version, int return_type) {
 		case vCASEX:	//fallthrough
 		case vCASEZ:	//fallthrough
 		case vCMOS:	//fallthrough
-		case vDEASSIGN:	//fallthrough
 		case vDEFAULT:	//fallthrough
 		case vDEFPARAM:	//fallthrough
 		case vDISABLE:	//fallthrough
