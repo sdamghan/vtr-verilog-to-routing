@@ -682,6 +682,7 @@ signal_list_t* netlist_expand_ast_of_module(ast_node_t** node_ref, char* instanc
                 && node->type != BLOCK
                 && node->type != VAR_DECLARE_LIST
                 && node->type != ASSIGN
+                && node->type != DEASSIGN
                 && node->type != ALWAYS
                 && node->type != STATEMENT
                 && node->type != CONCATENATE) {
@@ -3149,26 +3150,30 @@ void terminate_continuous_assignment(ast_node_t* node, signal_list_t* assignment
                 if (net->name == NULL)
                     net->name = pin->name;
 
-                nnode_t* buf_node = allocate_nnode(node->loc);
-                buf_node->type = BUF_NODE;
-                /* create the unique name for this gate */
-                buf_node->name = node_name(buf_node, instance_name_prefix);
+                if (node->type == DEASSIGN) {
+                    remove_fanout_pins_from_net(net, pin, pin->pin_net_idx);
+                } else {
+                    nnode_t* buf_node = allocate_nnode(node->loc);
+                    buf_node->type = BUF_NODE;
+                    /* create the unique name for this gate */
+                    buf_node->name = node_name(buf_node, instance_name_prefix);
 
-                buf_node->related_ast_node = node;
-                /* allocate the pins needed */
-                allocate_more_input_pins(buf_node, 1);
-                add_input_port_information(buf_node, 1);
-                allocate_more_output_pins(buf_node, 1);
-                add_output_port_information(buf_node, 1);
+                    buf_node->related_ast_node = node;
+                    /* allocate the pins needed */
+                    allocate_more_input_pins(buf_node, 1);
+                    add_input_port_information(buf_node, 1);
+                    allocate_more_output_pins(buf_node, 1);
+                    add_output_port_information(buf_node, 1);
 
-                npin_t* buf_input_pin = pin;
-                add_input_pin_to_node(buf_node, buf_input_pin, 0);
+                    npin_t* buf_input_pin = pin;
+                    add_input_pin_to_node(buf_node, buf_input_pin, 0);
 
-                /* finally hookup the output pin of the buffer to the orginal driver net */
-                npin_t* buf_output_pin = allocate_npin();
-                add_output_pin_to_node(buf_node, buf_output_pin, 0);
+                    /* finally hookup the output pin of the buffer to the orginal driver net */
+                    npin_t* buf_output_pin = allocate_npin();
+                    add_output_pin_to_node(buf_node, buf_output_pin, 0);
 
-                add_driver_pin_to_net(net, buf_output_pin);
+                    add_driver_pin_to_net(net, buf_output_pin);
+                }
             }
         }
     }
@@ -3188,7 +3193,7 @@ void terminate_continuous_assignment(ast_node_t* node, signal_list_t* assignment
                             pin->mapping = original_pin->mapping;
                             add_input_pin_to_node(node2, pin, j);
                         } else if (node->type == DEASSIGN) {
-                            remap_pin_to_new_node(original_pin, pad_node, pad_node->num_output_pins);
+                            remap_pin_to_new_node(original_pin, verilog_netlist->pad_node, verilog_netlist->pad_node->num_output_pins);
                         }
                         break;
                     }

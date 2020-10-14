@@ -528,7 +528,7 @@ integer_type_variable:
 	;
 
 deassign_items:
-	primary									{$$ = $1;}
+	primary									{$$ = newList(DEASSIGN, $1, my_location);}
 	| '{' expression_list '}'				{$$ = $2;}
 	;
 
