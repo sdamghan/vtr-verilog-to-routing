@@ -931,11 +931,30 @@ ast_node_t* ast_node_copy(ast_node_t* node) {
     if (node->types.variable.initial_value)
         node_copy->types.variable.initial_value = new VNumber((*node->types.variable.initial_value));
 
+    node_copy->types.variable.signedness = node->types.variable.signedness;
     node_copy->types.identifier = vtr::strdup(node->types.identifier);
     node_copy->identifier_node = ast_node_deep_copy(node_copy->identifier_node);
     node_copy->children = NULL;
 
     return node_copy;
+}
+
+/*---------------------------------------------------------------------------------------------
+ * (function: add_hierarchical_reference_contents)
+ * add the information of the hierarchical reference node 
+ * such as signedness to the local variable
+ *-------------------------------------------------------------------------------------------*/
+void add_hierarchical_reference_contents(ast_node_t* src, ast_node_t* dest) {
+    if (src && dest) {
+        //Copy contents
+        if (src->types.vnumber)
+            dest->types.vnumber = new VNumber((*src->types.vnumber));
+        if (src->types.variable.initial_value)
+            dest->types.variable.initial_value = new VNumber((*src->types.variable.initial_value));
+
+        dest->types.variable.signedness = src->types.variable.signedness;
+        dest->identifier_node = ast_node_deep_copy(src->identifier_node);
+    }
 }
 
 /*---------------------------------------------------------------------------
