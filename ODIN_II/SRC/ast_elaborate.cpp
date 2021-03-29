@@ -137,6 +137,7 @@ void update_instance_parameter_table_direct_instances(ast_node_t* instance, STRI
 void update_instance_parameter_table_defparams(ast_node_t* instance, STRING_CACHE* instance_param_table_sc);
 void override_parameters_for_all_instances(ast_node_t* module, sc_hierarchy* local_ref);
 
+void convert_signle_indexed_range_ref_to_array_ref(ast_node_t* node);
 void convert_2D_to_1D_array(ast_node_t** var_declare);
 void convert_2D_to_1D_array_ref(ast_node_t** node, sc_hierarchy* local_ref);
 char* make_chunk_size_name(char* instance_name_prefix, char* array_name);
@@ -1710,6 +1711,17 @@ ast_node_t* finalize_ast(ast_node_t* node, ast_node_t* parent, sc_hierarchy* loc
                                   "%s", "Part-selects can only contain constant expressions");
                 }
 
+                /* 
+                 * Check the equality of head and tail index. We consider 
+                 * this node as an ARRAY_REF if they are equal.
+                 */
+                VNumber* head_index = node->children[0]->types.vnumber;
+                VNumber* tail_index = node->children[1]->types.vnumber;
+
+                if (head_index->get_value() == tail_index->get_value()) {
+                    convert_signle_indexed_range_ref_to_array_ref(node);
+                }
+
                 break;
             }
             case ARRAY_REF: {
@@ -2278,6 +2290,16 @@ void override_parameters_for_all_instances(ast_node_t* module, sc_hierarchy* loc
         /* go through this instance's children */
         override_parameters_for_all_instances(instance, module_sc_hierarchy);
     }
+}
+
+/*---------------------------------------------------------------------------
+ * (function: convert_signle_indexed_range_ref_to_array_ref)
+ * converts a RANGE_REF node which has the equal head and tail index
+ * to an ARRAY_REF. This conversion will ease the netlist create process.
+ *-------------------------------------------------------------------------*/
+void convert_signle_indexed_range_ref_to_array_ref(ast_node_t* node) {
+    node->type = ARRAY_REF;
+    remove_child_from_node_at_index(node, 1);
 }
 
 void convert_2D_to_1D_array(ast_node_t** var_declare) {
