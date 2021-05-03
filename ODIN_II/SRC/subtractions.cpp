@@ -555,6 +555,14 @@ void split_adder_for_sub(nnode_t* nodeo, int a, int b, int sizea, int sizeb, int
     //connect_nodes(node[count - 1], (node[(count - 1)]->num_output_pins - 1), netlist->gnd_node, 0);
     //}
 
+    for (i = offset; i < count; i++) {
+        for (j = 0; j < node[i]->num_output_pins - 1; j++) {
+            char* new_output_pin_name = (char*)vtr::malloc((strlen(node[i]->name) + 20) * sizeof(char)); /* 6 chars for pin idx */
+            odin_sprintf(new_output_pin_name, "%s[1]", node[i]->name);
+            node[i]->output_pins[1]->name = new_output_pin_name;
+        }
+    }
+
     /* Probably more to do here in freeing the old node! */
     vtr::free(nodeo->name);
     vtr::free(nodeo->input_port_sizes);

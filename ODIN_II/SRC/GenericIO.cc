@@ -1,6 +1,4 @@
 /*
- * Copyright (c) 2009 Peter Andrew Jamieson (jamieson.peter@gmail.com)
- *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
  * files (the "Software"), to deal in the Software without
@@ -23,13 +21,20 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef PARTIAL_MAP_H
-#define PARTIAL_MAP_H
+#include "GenericIO.hh"
+#include "odin_error.h"
 
-// PROTOTYPES
-void partial_map_top(netlist_t* netlist);
-void instantiate_add_w_carry(nnode_t* node, short mark, netlist_t* netlist);
-void instantiate_multi_port_mux(nnode_t* node, short mark, netlist_t* netlist);
-void instantiate_multi_port_single_bit_mux(nnode_t* node, short mark, netlist_t* /*netlist*/);
+GenericIO::GenericIO() = default;
 
-#endif
+GenericIO::~GenericIO() = default;
+
+void* GenericIO::__read() {
+    error_message(UTIL, unknown_location, 
+                 "Function \"%s\" is called for reading the input file without definition provided!\n", __PRETTY_FUNCTION__); 
+    return NULL;     
+}
+
+void GenericIO::__write (const netlist_t* /* netlist */) {
+    error_message(UTIL, unknown_location, 
+                 "Function \"%s\" is called for reading the input file without definition provided!\n", __PRETTY_FUNCTION__); 
+}

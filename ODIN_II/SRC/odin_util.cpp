@@ -36,6 +36,7 @@
 
 #include "odin_util.h"
 #include "vtr_util.h"
+#include "vtr_path.h"
 #include "vtr_memory.h"
 #include <regex>
 #include <stdbool.h>
@@ -46,6 +47,12 @@
 #else
 #    include <sys/stat.h>
 #endif
+
+
+std::string& SSS (const char* s)
+{
+    return *(new std::string(s));
+}
 
 long shift_left_value_with_overflow_check(long input_value, long shift_by, loc_t loc) {
     if (shift_by < 0)
@@ -1032,4 +1039,19 @@ char* str_collate(char* str1, char* str2) {
         vtr::free(str2);
     }
     return buffer;
+}
+
+/**
+ * This shows the name of niput file, whether Verilog or BLIF
+*/
+void print_input_files_info () {
+    if (configuration.input_file_type == file_type_e::_VERILOG) {
+        for (std::string v_file : global_args.verilog_files.value()) 
+            printf("Verilog: %s\n", vtr::basename(v_file).c_str());
+        
+    } else if (configuration.input_file_type == file_type_e::_BLIF) {
+        printf("Input BLIF file: %s\n", vtr::basename(global_args.blif_file.value()).c_str());
+    }
+
+    fflush(stdout);
 }

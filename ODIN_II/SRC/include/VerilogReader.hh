@@ -1,6 +1,4 @@
 /*
- * Copyright (c) 2009 Peter Andrew Jamieson (jamieson.peter@gmail.com)
- *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
  * files (the "Software"), to deal in the Software without
@@ -23,13 +21,30 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef PARTIAL_MAP_H
-#define PARTIAL_MAP_H
+#ifndef __VERILOG_READER_H__
+#define __VERILOG_READER_H__
 
-// PROTOTYPES
-void partial_map_top(netlist_t* netlist);
-void instantiate_add_w_carry(nnode_t* node, short mark, netlist_t* netlist);
-void instantiate_multi_port_mux(nnode_t* node, short mark, netlist_t* netlist);
-void instantiate_multi_port_single_bit_mux(nnode_t* node, short mark, netlist_t* /*netlist*/);
+#include "GenericReader.hh"
+#include "ast_util.h"
+
+/**
+ * @brief A class to provide the general object of an input Verilog file reader
+*/
+class VerilogReader : public GenericReader {
+    public:
+        /**
+         * @brief Construct the VerilogReader object
+         * required by compiler
+         */
+        VerilogReader();
+        /**
+         * @brief Destruct the VerilogReader object
+         * to avoid memory leakage
+         */
+        ~VerilogReader();
+
+        void* __read();
+
+};
 
 #endif

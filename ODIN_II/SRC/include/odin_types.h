@@ -65,6 +65,8 @@
 #define STATS 18
 #define SEQUENTIAL_LEVELIZE 19
 
+#define SUBCKT_BLIF_ELABORATE_TRAVERSE_VALUE 30
+
 /* unique numbers for using void *data entries in some of the datastructures */
 #define RESET -1
 #define LEVELIZE 12
@@ -98,6 +100,9 @@ struct global_args_t {
     argparse::ArgValue<bool> write_ast_as_dot;
     argparse::ArgValue<bool> all_warnings;
     argparse::ArgValue<bool> show_help;
+    
+    argparse::ArgValue<bool> subckt_blif_type; // to specify the type of input blif file
+    argparse::ArgValue<bool> eblif_type; // to specify the type of input blif file
 
     argparse::ArgValue<std::string> adder_def; //DEPRECATED
 
@@ -204,6 +209,7 @@ enum init_value_e {
 enum operation_list {
     NO_OP,
     MULTI_PORT_MUX, // port 1 = control, port 2+ = mux options
+    MULTI_BIT_MUX_2, // port 1 = control, port 2+ = mux options
     FF_NODE,
     BUF_NODE,
     INPUT_NODE,

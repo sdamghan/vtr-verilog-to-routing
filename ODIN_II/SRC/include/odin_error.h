@@ -22,10 +22,13 @@ enum odin_error {
     PARSER,
     /* for AST related errors */
     AST,
+    /* for BLIF elaboration related error */
+    BLIF_ELBORATION,
     /* for Netlist related errors */
     NETLIST,
     /* for blif parser errors */
     PARSE_BLIF,
+    PARSE_YOSYS_BLIF,
     /* for errors in the netlist simulation */
     SIMULATION,
 };
