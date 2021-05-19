@@ -1015,7 +1015,7 @@ void* SubcktBLIFReader::__read() {
     
     switch (configuration.in_blif_type) {
         case (blif_type_e::_SUBCKT_BLIF): {
-            if (strcmp(name, "$add") == 0 || strcmp(name, "$sub") == 0 || strcmp(name, "$dff") == 0 || strcmp(name, "$mux") == 0) {
+            if (strcmp(name, "$add") == 0 || strcmp(name, "$sub") == 0 || strcmp(name, "$dff") == 0 || strcmp(name, "$mux") == 0 || strcmp(name, "$mul") == 0) {
                 model = create_multiple_inputs_one_output_port_model(name, ports);
 
             } else {
