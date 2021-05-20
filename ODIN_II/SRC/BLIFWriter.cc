@@ -52,11 +52,6 @@
 #include "BLIF.hh"
 
 
-
-netlist_t* blif_netlist;
-Hashtable* output_nets_hash;
-
-
 /**
  * -----------------------------------------------------------------------------------------------------------------------------
  * ---------------------------------------------------------- Writer -----------------------------------------------------------
@@ -71,11 +66,12 @@ BLIF::Writer::Writer(): GenericWriter() {
 
 BLIF::Writer::~Writer() = default;
 
-void BLIF::Writer::__write(const netlist_t* netlist) {
-
-    this->output_file = create_blif(global_args.output_file.value().c_str());
-
+inline void BLIF::Writer::__write(const netlist_t* netlist) {
     output_blif(this->output_file, netlist);
+}
+
+inline void BLIF::Writer::__create_file(const file_type_e /* file_type */) {
+    this->output_file = create_blif(global_args.output_file.value().c_str());
 }
 /**
  * ---------------------------------------------------------------------------------------------
@@ -337,6 +333,7 @@ void BLIF::Writer::depth_first_traversal_to_output(short marker_value, FILE* fp,
     netlist->gnd_node->name = vtr::strdup("gnd");
     netlist->vcc_node->name = vtr::strdup("vcc");
     netlist->pad_node->name = vtr::strdup("unconn");
+    
     /* now traverse the ground, vcc, and unconn pins */
     depth_traverse_output_blif(netlist->gnd_node, marker_value, fp);
     depth_traverse_output_blif(netlist->vcc_node, marker_value, fp);
@@ -610,7 +607,7 @@ void BLIF::Writer::define_ff(nnode_t* node, FILE* out) {
     oassert(node->num_input_pins == 2);
 
     // grab the edge sensitivity of the flip flop
-    const char* edge_type_str = edge_type_blif_str(node);
+    const char* clk_edge_type_str = edge_type_blif_str(node->clk_edge_type, node->loc);
 
     std::string input;
     std::string output;
@@ -625,7 +622,7 @@ void BLIF::Writer::define_ff(nnode_t* node, FILE* out) {
     print_output_pin(out, node);
 
     /* sensitivity */
-    fprintf(out, " %s", edge_type_str);
+    fprintf(out, " %s", clk_edge_type_str);
 
     /* clock */
     print_input_single_driver(out, node, 1);

@@ -100,9 +100,8 @@ struct global_args_t {
     argparse::ArgValue<bool> write_ast_as_dot;
     argparse::ArgValue<bool> all_warnings;
     argparse::ArgValue<bool> show_help;
-    
-    argparse::ArgValue<bool> subckt_blif_type; // to specify the type of input blif file
-    argparse::ArgValue<bool> eblif_type; // to specify the type of input blif file
+
+    argparse::ArgValue<bool> coarsen;
 
     argparse::ArgValue<std::string> adder_def; //DEPRECATED
 
@@ -208,8 +207,7 @@ enum init_value_e {
 
 enum operation_list {
     NO_OP,
-    MULTI_PORT_MUX, // port 1 = control, port 2+ = mux options
-    MULTI_BIT_MUX_2, // port 1 = control, port 2+ = mux options
+    MULTI_PORT_MUX,  // port 1 = control, port 2+ = mux options
     FF_NODE,
     BUF_NODE,
     INPUT_NODE,
@@ -258,12 +256,16 @@ enum operation_list {
     PAD_NODE,
     HARD_IP,
     GENERIC,  /*added for the unknown node type */
-    INSTANCE, /* added for module, function and task instances */
     CLOG2,    // $clog2
     UNSIGNED, // $unsigned
     SIGNED,   // $signed
+                            // [START] operations to cover yosys subckt
+    MULTI_BIT_MUX_2,        // like MUX_2 but with n-bit input/output
+    DFFSR,                  // data, clear and set to output port
+                            // [END] operations to cover yosys subckt
     operation_list_END
 };
+typedef std::unordered_map<std::string, operation_list> typemap;
 
 enum ids {
     NO_ID,
@@ -501,7 +503,9 @@ struct nnode_t {
     int ratio;                  //clock ratio for clock nodes
     init_value_e initial_value; // initial net value
     bool internal_clk_warn = false;
-    edge_type_e edge_type; //
+    edge_type_e clk_edge_type; //
+    edge_type_e clr_edge_type; //
+    edge_type_e set_edge_type; //
     bool covered = false;
 
     // For mixing soft and hard logic optimizations

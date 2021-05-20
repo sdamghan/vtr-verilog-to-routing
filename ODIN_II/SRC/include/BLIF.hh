@@ -76,9 +76,6 @@ struct hard_block_models {
     Hashtable* index;
 };
 
-class OdinBLIFReader;
-class SubcktBLIFReader;
-
 extern int line_count;
 extern int num_lines;
 extern bool skip_reading_bit_map;
@@ -120,6 +117,11 @@ class BLIF {
 
                 void* __read();
 
+                /* No need to have writer in Generic Reader */
+                void __write(const netlist_t* /* netlist */) {
+                    error_message(UTIL, unknown_location, "%s is not available in Generic Reader\n", __PRETTY_FUNCTION__);
+                }
+
             protected:
                 /**
                  *---------------------------------------------------------------------------------------------
@@ -130,14 +132,24 @@ class BLIF {
                 * 
                 * @param buffer a global buffer for tokenizing
                 * @param models list of hard block models
-                *-------------------------------------------------------------------------------------------*/
+                * -------------------------------------------------------------------------------------------
+                */
                 int read_tokens(char* buffer, hard_block_models* models);
+                /**
+                 *---------------------------------------------------------------------------------------------
+                 * (function: resolve_signal_name_based_on_blif_type)
+                 * 
+                 * @brief to find the name of top module
+                 * -------------------------------------------------------------------------------------------
+                 */
+                static void find_top_module();
                 /**
                  * ---------------------------------------------------------------------------------------------
                  * (function: hook_up_nets)
                  * 
                  * @brief find the output nets and add the corresponding nets
-                 *-------------------------------------------------------------------------------------------*/
+                 * -------------------------------------------------------------------------------------------
+                 */
                 void hook_up_nets();
                 /**
                  * ---------------------------------------------------------------------------------------------
@@ -147,7 +159,8 @@ class BLIF {
                  * looking each one up in the output_nets_sc.
                  * 
                  * @param node represents one of netlist internal nodes or ff nodes or top output nodes
-                 * ---------------------------------------------------------------------------------------------*/
+                 * ---------------------------------------------------------------------------------------------
+                 */
                 void hook_up_node(nnode_t* node);
                 /**
                  *------------------------------------------------------------------------------------------- 
@@ -156,7 +169,8 @@ class BLIF {
                 * @brief to create the hard block nodes
                 * 
                 * @param models list of hard block models
-                *-------------------------------------------------------------------------------------------*/
+                * -------------------------------------------------------------------------------------------
+                */
                 void create_hard_block_nodes(hard_block_models* models);
                 /**
                  * ---------------------------------------------------------------------------------------------
@@ -165,7 +179,8 @@ class BLIF {
                  * @brief to create an internal node and driver from that node
                  * 
                  * @param name_prefix
-                 *-------------------------------------------------------------------------------------------*/
+                 * -------------------------------------------------------------------------------------------
+                 */
                 void create_internal_node_and_driver();
                 /**
                  *---------------------------------------------------------------------------------------------
@@ -174,14 +189,16 @@ class BLIF {
                 * @brief to build a the top level input
                 * 
                 * @param name_str representing the name input signal
-                *-------------------------------------------------------------------------------------------*/
-                void build_top_input_node(const char* name_prefix, const char* name_str);
+                * -------------------------------------------------------------------------------------------
+                */
+                void build_top_input_node(const char* name_str);
                 /**
                  * (function: add_top_input_nodes)
                  * 
                  * @brief to add the top level inputs to the netlist
                  *
-                 *-------------------------------------------------------------------------------------------*/
+                 * -------------------------------------------------------------------------------------------
+                 */
                 void add_top_input_nodes();
                 /**
                  *---------------------------------------------------------------------------------------------
@@ -189,7 +206,8 @@ class BLIF {
                 * 
                 * @brief to add the top level outputs to the netlist
                 * 
-                *-------------------------------------------------------------------------------------------*/
+                * -------------------------------------------------------------------------------------------
+                */
                 void rb_create_top_output_nodes();
                 /**
                  *---------------------------------------------------------------------------------------------
@@ -202,8 +220,9 @@ class BLIF {
                 * @param model hard block model
                 * 
                 * @return the hard is verified against model or no.
-                *-------------------------------------------------------------------------------------------*/
-                int verify_hard_block_ports_against_model(hard_block_ports* ports, hard_block_model* model);
+                * -------------------------------------------------------------------------------------------
+                */
+                bool verify_hard_block_ports_against_model(hard_block_ports* ports, hard_block_model* model);
                 /**
                  *---------------------------------------------------------------------------------------------
                 * (function: read_hard_block_model)
@@ -215,8 +234,9 @@ class BLIF {
                 * @param ports list of a hard block ports
                 * 
                 * @return the file to its original position when finished.
-                *-------------------------------------------------------------------------------------------*/
-                hard_block_model* read_hard_block_model(char* name_subckt, hard_block_ports* ports);
+                * -------------------------------------------------------------------------------------------
+                */
+                hard_block_model* read_hard_block_model(char* name_subckt, operation_list type, hard_block_ports* ports);
                 /*
                 * ---------------------------------------------------------------------------------------------
                 * function: Creates the drivers for the top module
@@ -381,12 +401,64 @@ class BLIF {
                 static void free_hard_block_ports(hard_block_ports* p);
 
             private:
-                OdinBLIFReader* odin_blif_reader;
-                SubcktBLIFReader* subckt_blif_reader;
                 /**
-                 * [TODO]
-                 * EBLIFReader* eblif_reader();
-                */
+                 *---------------------------------------------------------------------------------------------
+                 * (function: resolve_signal_name_based_on_blif_type)
+                 * 
+                 * @brief to make the signal names of an input blif 
+                 * file compatible with the odin's name convention
+                 * 
+                 * @param name_str representing the name input signal
+                 * -------------------------------------------------------------------------------------------
+                 */
+                static char* resolve_signal_name_based_on_blif_type(const char* name_prefix, const char* name_str);
+                /**
+                 *---------------------------------------------------------------------------------------------
+                 * (function: create_hard_block)
+                 * 
+                 * @brief create a hard block model based on the given hard block port
+                 * 
+                 * @param name representing the name of a hard block
+                 * @param ports list of a hard block ports
+                 * -------------------------------------------------------------------------------------------
+                 */
+                hard_block_model* create_hard_block_model(const char* name, operation_list type, hard_block_ports* ports);
+                /**
+                 *---------------------------------------------------------------------------------------------
+                 * (function: create_model)
+                 * 
+                 @brief create a model that has multiple input ports and one output port.
+                 * port sizes will be specified based on the number of pins in the BLIF file
+                 * 
+                 * 
+                 * @param name representing the name of a hard block
+                 * @param ports list of a hard block ports
+                 * @param output_idx_START showing the beginning idx of output ports
+                 * @param output_idx_END showing the end idx of output ports
+                 * -------------------------------------------------------------------------------------------
+                 */
+                hard_block_model* create_model(const char* name, hard_block_ports* ports, int output_idx_START, int output_idx_END);
+                /**
+                 *---------------------------------------------------------------------------------------------
+                 * (function: hard_block_sensitivities)
+                 * 
+                 * @brief specify whether a type needs clock sensitivity or not
+                 * 
+                 * @param subckt_name hard block name
+                 * @param new_node pointer to the netlist node
+                 * -------------------------------------------------------------------------------------------
+                 */
+                void hard_block_sensitivities(const char* subckt_name, nnode_t* new_node);
+                /**
+                 *---------------------------------------------------------------------------------------------
+                 * (function: need_sensitivity)
+                 * 
+                 * @brief specify whether a type needs clock sensitivity or not
+                 * 
+                 * @param type node type
+                 * -------------------------------------------------------------------------------------------
+                 */
+                bool need_sensitivity(operation_list type);
         };
 
         class Writer : public GenericWriter {
@@ -402,7 +474,14 @@ class BLIF {
                  */
                 ~Writer();
 
+                /* No need to have reader in Generic Writer */
+                void* __read() {
+                    error_message(UTIL, unknown_location, "%s is not available in Generic Writer\n", __PRETTY_FUNCTION__);
+                    return NULL;
+                }
+
                 void __write(const netlist_t* netlist);
+                void __create_file(const file_type_e file_type);
 
             protected:
                 /**

@@ -28,15 +28,12 @@
 #include "config_t.h"
 #include "odin_ii.h"
 
-GenericReader::GenericReader(): GenericIO() {}
-
-GenericReader::~GenericReader() {
-    if (this->verilog_reader)
-        static_cast<VerilogReader*>(this->verilog_reader)->~VerilogReader();
-    
-    if (this->blif_reader)
-        this->blif_reader->~GenericReader();
+GenericReader::GenericReader(): GenericIO() {
+    this->verilog_reader = NULL;
+    this->blif_reader = NULL;
 }
+
+GenericReader::~GenericReader() = default;
 
 inline void* GenericReader::__read() {
     void* netlist = NULL;
@@ -72,10 +69,20 @@ inline void* GenericReader::__read() {
 
 inline void* GenericReader::_read_verilog() {
     this->verilog_reader = new VerilogReader();
-    return static_cast<void*>(this->verilog_reader->__read());
+    void* to_return = this->verilog_reader->__read();
+
+    if (this->verilog_reader)
+        delete this->verilog_reader;
+    
+    return to_return;
 }
 
 inline void* GenericReader::_read_blif() {
     this->blif_reader = new BLIF::Reader();
-    return static_cast<void*>(this->blif_reader->__read());
+    void* to_return = this->blif_reader->__read();
+
+    if (this->blif_reader)
+        delete this->blif_reader;
+
+    return to_return;
 }
