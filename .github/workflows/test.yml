@@ -199,8 +199,21 @@ jobs:
         ./.github/travis/setup.sh
 
   ODINII:
-    name: 'ODIN-II Micro Tests'
     runs-on: ubuntu-18.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: [
+          {
+            name: 'Odin Reg Basic',
+            suite: 'odin_reg_basic'
+          },
+          {
+            name: 'Odin Reg Techmap',
+            suite: 'odin_reg_techmap'
+          }
+        ]
+    name: 'R: ${{ matrix.name }}'
     steps:
 
     - uses: actions/checkout@v2
@@ -219,7 +232,7 @@ jobs:
         source .github/travis/common.sh
         ./.github/travis/setup.sh
         ./.github/travis/build.sh
-        ./run_reg_test.py odin_reg_micro -show_failures -j2
+        ./run_reg_test.py ${{ matrix.suite }} -show_failures -j2
         ./.github/travis/setup.sh
 
 
