@@ -254,6 +254,11 @@ void blif_elaborate_node(nnode_t* node, short traverse_number, netlist_t* netlis
         case SR:
         case ASR:
         case MULTIPLY:
+            if (hard_multipliers)
+                check_block_ports(node, traverse_number, netlist);
+
+            mult_list = insert_in_vptr_list(mult_list, node);
+            break;
         case MEMORY:
         case HARD_IP:
         case ADDER_FUNC:
