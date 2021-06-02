@@ -26,7 +26,7 @@
 #include <stdarg.h>
 #include "odin_types.h"
 #include "odin_globals.h"
-#include "read_xml_config_file.h"
+#include "read_oxml_config_file.h"
 #include "read_xml_util.h"
 #include "pugixml.hpp"
 #include "pugixml_util.hpp"
@@ -48,7 +48,7 @@ extern HardSoftLogicMixer* mixer;
 
 /*-------------------------------------------------------------------------
  * (function: read_config_file)
- * This reads an XML config file that specifies what we will do in the tool.
+ * This reads an Odin XML config file that specifies what we will do in the tool.
  *
  * See config_t in types.h to see the data structures used in this read.
  *-----------------------------------------------------------------------*/
@@ -89,7 +89,7 @@ void read_config_file(const char* file_name) {
         return;
     }
 
-    /* Release the full XML tree */
+    /* Release the full Odin XML tree */
     return;
 }
 

@@ -13,7 +13,7 @@ if len(sys.argv) is not 2:
 
 path = abspath(sys.argv[1]) + "/"
 slog = open(path + "ODIN_success.lst", "w")
-filelist = filter(odin.isXML, os.listdir(path))
+filelist = filter(odin.isOXML, os.listdir(path))
 
 for file in filelist:
     cmd = "../../odin_II.exe -c " + path + file

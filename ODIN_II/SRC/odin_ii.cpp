@@ -41,7 +41,7 @@
 #include "parse_making_ast.h"
 #include "netlist_create_from_ast.h"
 #include "ast_util.h"
-#include "read_xml_config_file.h"
+#include "read_oxml_config_file.h"
 #include "read_xml_arch_file.h"
 #include "partial_map.h"
 #include "multipliers.h"
@@ -382,7 +382,7 @@ void get_options(int argc, char** argv) {
 
     input_grp.add_argument(global_args.config_file, "-c")
         .help("Configuration file")
-        .metavar("XML_CONFIGURATION_FILE");
+        .metavar("OXML_CONFIGURATION_FILE");
 
     input_grp.add_argument(global_args.verilog_files, "-V")
         .help("list of Verilog HDL file")

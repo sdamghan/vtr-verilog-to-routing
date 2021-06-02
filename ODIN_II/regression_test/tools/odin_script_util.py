@@ -24,9 +24,9 @@ def isVerilog(file):
     return re.search("\.v$", file) != None
 
 
-def isXML(file):
-    """Return true if the file has the .xml extension."""
-    return re.search("\.xml$", file) != None
+def isOXML(file):
+    """Return true if the file has the .oxml extension."""
+    return re.search("\.oxml$", file) != None
 
 
 def isSoft(file):

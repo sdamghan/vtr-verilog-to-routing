@@ -118,7 +118,7 @@ while ($NEXT_FILE = <LIST_FILE>)
 	{
 		# set up the regex buffer and extract the name without .v extension
 		$_ = $NEXT_FILE;
-		s/\.xml//g;	
+		s/\.oxml//g;	
 		$NAME_WITHOUT_EXTENSION = $_;
 
 		printf("--------------------------------------------------------------\n");

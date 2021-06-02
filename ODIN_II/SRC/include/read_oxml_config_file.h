@@ -23,8 +23,8 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef READ_XML_CONFIG_FILE_H
-#define READ_XML_CONFIG_FILE_H
+#ifndef READ_OXML_CONFIG_FILE_H
+#define READ_OXML_CONFIG_FILE_H
 
 #include "odin_types.h"
 

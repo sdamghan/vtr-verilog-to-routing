@@ -70,7 +70,7 @@ def patch_logs(values):
         # strip username from the logs
         r"(" + pwd.getpwuid(os.getuid()).pw_name + r")": "",
         # strip path from known file extensions
-        r"([\/]?[a-zA-Z_.\-0-9]*\/)(?=[^\/\s]*(_input|_output|\.xml|\.v|\.vh|\.blif|\.log|\.do|\.dot|_vectors|_activity)[\s\n]+)": "",
+        r"([\/]?[a-zA-Z_.\-0-9]*\/)(?=[^\/\s]*(_input|_output|\.xml|\.oxml|\.v|\.vh|\.blif|\.log|\.do|\.dot|_vectors|_activity)[\s\n]+)": "",
         # bison used to call EOF $end, but switched to end of file since
         r"syntax error, unexpected \$end": r"syntax error, unexpected end of file",
     }

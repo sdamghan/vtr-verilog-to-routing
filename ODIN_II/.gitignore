@@ -7,6 +7,7 @@ regression_test/latest
 /*.dot
 /*.do
 /*.xml
+/*.oxml
 /*_input
 /*_output
 /*_vectors

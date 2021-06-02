@@ -165,7 +165,7 @@ def configOptParse():
     parser = OptionParser(
         usage="odin_config_maker.py [options] [output_path] [base_filename]",
         prog="odin_config_maker.py",
-        description="[output_path] specifies where configuration files will be written. [base_filename] is used to create the appropriate configuration files, [base_filename].soft.xml, [base_filename].hard_mem.xml, [base_filename].hard_mult.xml, [base_filename].hard.xml",
+        description="[output_path] specifies where configuration files will be written. [base_filename] is used to create the appropriate configuration files, [base_filename].soft.oxml, [base_filename].hard_mem.oxml, [base_filename].hard_mult.oxml, [base_filename].hard.oxml",
     )
 
     # Input options
