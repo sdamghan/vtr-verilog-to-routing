@@ -3,8 +3,8 @@ image:
   
 # List the start up tasks. You can start them in parallel in multiple terminals. See https://www.gitpod.io/docs/config-start-tasks/
 tasks:
-  - init: |
-      make BUILD_TYPE=debug
+  - init: echo "starting init" |
+          make BUILD_TYPE=debug
 
 github:
   prebuilds:
