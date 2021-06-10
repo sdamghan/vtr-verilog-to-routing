@@ -33,6 +33,8 @@ class TaskConfig:
         circuit_list_add,
         arch_list_add,
         parse_file,
+        includes_dir=None,
+        include_list_add=None,
         second_parse_file=None,
         script_path=None,
         script_params=None,
@@ -53,6 +55,8 @@ class TaskConfig:
         self.arch_dir = archs_dir
         self.circuits = circuit_list_add
         self.archs = arch_list_add
+        self.include_dir = includes_dir
+        self.includes = include_list_add
         self.parse_file = parse_file
         self.second_parse_file = second_parse_file
         self.script_path = script_path
@@ -82,6 +86,7 @@ class Job:
         task_name,
         arch,
         circuit,
+        include,
         script_params,
         work_dir,
         run_command,
@@ -92,6 +97,7 @@ class Job:
         self._task_name = task_name
         self._arch = arch
         self._circuit = circuit
+        self._include = include
         self._script_params = script_params
         self._run_command = run_command
         self._parse_command = parse_command
@@ -116,6 +122,12 @@ class Job:
         return the circuit file name of the job
         """
         return self._circuit
+    
+    def include(self):
+        """
+        return the include circuits file name of the job
+        """
+        return self._include
 
     def script_params(self):
         """
@@ -174,6 +186,8 @@ def load_task_config(config_file):
     unique_keys = set(
         [
             "circuits_dir",
+            "includes_dir",
+            "include_list_add",
             "archs_dir",
             "additional_files",
             "parse_file",
@@ -207,7 +221,12 @@ def load_task_config(config_file):
         value = value.strip()
 
         if key in unique_keys:
-            if key not in key_values:
+            if key == "include_list_add":
+                if key not in key_values: 
+                    key_values[key] = [value]
+                else:
+                    key_values[key].append(value)
+            elif key not in key_values:
                 key_values[key] = value
             elif key == "parse_file":
                 key_values["second_parse_file"] = value
@@ -316,6 +335,16 @@ def create_jobs(args, configs, after_run=False):
             # Collect any extra script params from the config file
             cmd = [abs_circuit_filepath, abs_arch_filepath]
 
+            includes = ""
+            if config.includes:
+                cmd += ["-include"]
+                for include in config.includes:             
+                    abs_include_filepath = resolve_vtr_source_file(config, include, config.include_dir)
+                    delimiter = " " if (include != config.includes[-1]) else ""
+                    includes = includes + abs_include_filepath + delimiter
+
+            cmd += [includes]
+
             # Check if additional architectural data files are present
             if config.additional_files_list_add:
                 for additional_file in config.additional_files_list_add:
@@ -401,6 +430,7 @@ def create_jobs(args, configs, after_run=False):
                             args,
                             config,
                             circuit,
+                            includes,
                             arch,
                             value,
                             cmd,
@@ -418,6 +448,7 @@ def create_jobs(args, configs, after_run=False):
                         args,
                         config,
                         circuit,
+                        includes,
                         arch,
                         None,
                         cmd,
@@ -437,6 +468,7 @@ def create_job(
     args,
     config,
     circuit,
+    include,
     arch,
     param,
     cmd,
@@ -501,6 +533,7 @@ def create_job(
         config.task_name,
         arch,
         circuit,
+        include,
         param_string,
         work_dir + "/" + param_string,
         current_cmd,

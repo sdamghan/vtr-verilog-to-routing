@@ -34,6 +34,7 @@ def run(
     architecture_file,
     circuit_file,
     power_tech_file=None,
+    include_files=None,
     start_stage=VtrStage.ODIN,
     end_stage=VtrStage.VPR,
     command_runner=vtr.CommandRunner(),
@@ -167,6 +168,16 @@ def run(
     shutil.copy(str(circuit_file), str(circuit_copy))
     shutil.copy(str(architecture_file), str(architecture_copy))
 
+    # Extract includes path 
+    for include in include_files:
+        include_paths = str(include).split(" ")
+        # Copy given additional Verilog files
+        for include_path in include_paths:
+            include_file = vtr.util.verify_file(include_path, "Circuit")
+            include_copy = temp_dir / include_file.name
+            shutil.copy(str(include_path), str(include_copy))
+
+
     # There are multiple potential paths for the netlist to reach a tool
     # We initialize it here to the user specified circuit and let downstream
     # stages update it
@@ -179,6 +190,7 @@ def run(
         vtr.odin.run(
             architecture_copy,
             next_stage_netlist,
+            include_files,
             output_netlist=post_odin_netlist,
             command_runner=command_runner,
             temp_dir=temp_dir,
