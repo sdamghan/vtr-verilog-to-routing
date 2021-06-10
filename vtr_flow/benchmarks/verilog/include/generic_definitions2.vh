@@ -1,0 +1,7 @@
+
+/*
+ * DEFINITIONS
+*/
+`define MEMORY_CONTROLLER_TAGS 1
+`define MEMORY_CONTROLLER_TAG_SIZE 1
+`define TAG__str 1'b0

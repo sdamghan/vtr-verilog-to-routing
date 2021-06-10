@@ -5,14 +5,22 @@
 # Path to directory of circuits to use
 circuits_dir=benchmarks/verilog
 
+# Path to directory of includes circuits to use
+includes_dir=benchmarks/verilog/include
+
 # Path to directory of architectures to use
 archs_dir=arch/no_timing/memory_sweep
 
 # Add circuits to list to sweep
+circuit_list_add=ch_intrinsics_modified.v
 circuit_list_add=ch_intrinsics.v
 circuit_list_add=diffeq1.v
 circuit_list_add=single_wire.v
 circuit_list_add=single_ff.v
+
+# Add circuits to includes list to sweep
+include_list_add=generic_definitions1.vh
+include_list_add=generic_definitions2.vh
 
 # Add architectures to list to sweep
 arch_list_add=k4_N10_memSize16384_memData64.xml
